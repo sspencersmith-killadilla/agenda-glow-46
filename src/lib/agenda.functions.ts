@@ -282,7 +282,13 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
 
 // ─────────────────────────── Enrichment via Legistar ───────────────────────────
 
-async function callEnrichAI(opts: { text?: string; pdfBase64?: string; itemTitle: string }) {
+type AiFilePart = { mediaType: string; base64: string };
+
+async function callEnrichAI(opts: {
+  text?: string;
+  files?: AiFilePart[];
+  itemTitle: string;
+}) {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("Missing LOVABLE_API_KEY");
   const gateway = createLovableAiGatewayProvider(key);
@@ -298,8 +304,8 @@ async function callEnrichAI(opts: { text?: string; pdfBase64?: string; itemTitle
       }`,
     },
   ];
-  if (opts.pdfBase64) {
-    userParts.push({ type: "file", mediaType: "application/pdf", data: opts.pdfBase64 });
+  for (const f of opts.files ?? []) {
+    userParts.push({ type: "file", mediaType: f.mediaType, data: f.base64 });
   }
 
   const { text } = await generateText({
