@@ -4,6 +4,33 @@ import { generateText } from "ai";
 import { getGeminiModel } from "@/lib/google-ai.server";
 import { SEED_AGENDA_TITLE, SEED_AGENDA_DATE, SEED_AGENDA_TEXT } from "@/lib/agenda-seed";
 
+export const testGeminiConnection = createServerFn({ method: "POST" }).handler(
+  async () => {
+    const usingOwnKey = Boolean(process.env.GEMINI_API_KEY);
+    const sample = `CITY COUNCIL REGULAR MEETING — SAMPLE
+CONSENT AGENDA
+24-0001  Consider approval of a $12,500 purchase of office supplies for the City Secretary's Office.`;
+    const started = Date.now();
+    try {
+      const items = await callAIParser(sample);
+      return {
+        ok: true,
+        usingOwnKey,
+        ms: Date.now() - started,
+        itemsParsed: items.length,
+        sampleItem: items[0]?.raw_title ?? null,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        usingOwnKey,
+        ms: Date.now() - started,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  },
+);
+
 const ENRICH_INSTRUCTIONS = `You are reading a McKinney, TX City Council staff report / ordinance / resolution document attached to an agenda item. Extract the key facts as JSON. Respond with ONLY a JSON object (no markdown fences, no commentary):
 
 {
