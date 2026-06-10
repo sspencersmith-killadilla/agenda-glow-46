@@ -91,11 +91,21 @@ export const getItem = createServerFn({ method: "GET" })
     return item;
   });
 
+type ParsedItem = {
+  item_number: string | null;
+  raw_title: string;
+  item_type: string;
+  department: string;
+  cost_estimate: string | null;
+  cost_numeric: number | null;
+  plain_summary: string;
+};
+
 async function insertParsed(opts: {
   title: string;
   meetingDate: string | null;
   sourceFilename: string | null;
-  items: z.infer<typeof ItemSchema>[];
+  items: ParsedItem[];
 }) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: agenda, error: aErr } = await supabaseAdmin
