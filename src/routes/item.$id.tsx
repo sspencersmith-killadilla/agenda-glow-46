@@ -154,13 +154,59 @@ function ItemDetail() {
           </CardContent>
         </Card>
 
-        {it.attachments && it.attachments.length > 0 && (
+        {it.locations && it.locations.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                {it.locations.length === 1 ? "Location" : "Locations"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              {it.locations.map((loc, i) => {
+                const q = encodeURIComponent(`${loc}, McKinney, TX`);
+                return (
+                  <div key={i} className="space-y-2">
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${q}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 font-medium text-primary underline-offset-2 hover:underline"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      {loc}
+                    </a>
+                    <iframe
+                      title={`Map of ${loc}`}
+                      src={`https://www.google.com/maps?q=${q}&output=embed`}
+                      className="h-64 w-full rounded-md border"
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                    />
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        )}
+
+        {(it.attachments && it.attachments.length > 0) || it.matter_url ? (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Source documents</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              {it.attachments.map((a, i) => (
+              {it.matter_url && (
+                <a
+                  href={it.matter_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  View on Legistar (official record)
+                </a>
+              )}
+              {it.attachments?.map((a, i) => (
                 <a
                   key={i}
                   href={a.url}
@@ -177,7 +223,7 @@ function ItemDetail() {
               ))}
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
         <Link to="/" className="inline-block">
           <Button variant="outline" size="sm">Back to dashboard</Button>
