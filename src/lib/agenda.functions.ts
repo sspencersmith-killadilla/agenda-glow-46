@@ -470,7 +470,9 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
           detailed_summary: str(parsed.detailed_summary) || null,
           locations,
           enrichment_status: "done",
-          enrichment_error: null,
+          enrichment_error: cost_numeric == null && !cost_estimate
+            ? "No dollar amount stated in the linked staff report or resolution"
+            : null,
           enriched_at: new Date().toISOString(),
         })
         .eq("id", item.id);
