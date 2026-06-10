@@ -55,6 +55,8 @@ function ItemDetail() {
     detailed_summary: string | null;
     staff_report_url: string | null;
     matter_status: string | null;
+    matter_url: string | null;
+    locations: string[] | null;
     attachments: { name: string; url: string }[] | null;
   };
 
