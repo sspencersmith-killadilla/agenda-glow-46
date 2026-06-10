@@ -386,44 +386,67 @@ function AgendaDashboard({ agendaId }: { agendaId: string }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((it) => (
-                  <TableRow key={it.id} className="align-top">
-                    <TableCell className="font-mono text-xs">
-                      <Link
-                        to="/item/$id"
-                        params={{ id: it.id }}
-                        className="text-primary underline-offset-2 hover:underline"
-                      >
-                        {it.item_number || "—"}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{it.item_type}</Badge>
-                    </TableCell>
-                    <TableCell className="text-sm">{it.department}</TableCell>
-                    <TableCell className="text-sm">
-                      <Link
-                        to="/item/$id"
-                        params={{ id: it.id }}
-                        className="block font-medium hover:underline"
-                      >
-                        {it.raw_title.length > 110
-                          ? it.raw_title.slice(0, 110) + "…"
-                          : it.raw_title}
-                      </Link>
-                      <span className="mt-1 block text-muted-foreground">
-                        {it.plain_summary}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right text-sm">
-                      {it.cost_estimate ? (
-                        <span className="font-medium">{it.cost_estimate}</span>
-                      ) : (
-                        <span className="text-muted-foreground">Not disclosed</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filtered.map((it) => {
+                  const flagged =
+                    it.on_consent && (Number(it.cost_numeric) || 0) > 1_000_000;
+                  return (
+                    <TableRow
+                      key={it.id}
+                      className={
+                        "align-top " +
+                        (flagged
+                          ? "bg-destructive/5 hover:bg-destructive/10 border-l-2 border-l-destructive/60"
+                          : "")
+                      }
+                    >
+                      <TableCell className="font-mono text-xs">
+                        <Link
+                          to="/item/$id"
+                          params={{ id: it.id }}
+                          className="text-primary underline-offset-2 hover:underline"
+                        >
+                          {it.item_number || "—"}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{it.item_type}</Badge>
+                        {it.on_consent && (
+                          <Badge variant="outline" className="ml-1 text-[10px]">
+                            Consent
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">{it.department}</TableCell>
+                      <TableCell className="text-sm">
+                        <Link
+                          to="/item/$id"
+                          params={{ id: it.id }}
+                          className="block font-medium hover:underline"
+                        >
+                          {it.raw_title.length > 110
+                            ? it.raw_title.slice(0, 110) + "…"
+                            : it.raw_title}
+                        </Link>
+                        <span className="mt-1 block text-muted-foreground">
+                          {it.plain_summary}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right text-sm">
+                        {it.cost_estimate ? (
+                          <span
+                            className={
+                              flagged ? "font-semibold text-destructive" : "font-medium"
+                            }
+                          >
+                            {it.cost_estimate}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">Not disclosed</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
                 {filtered.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">

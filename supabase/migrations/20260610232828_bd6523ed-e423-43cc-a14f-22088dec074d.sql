@@ -1,0 +1,1 @@
+ALTER TABLE public.agenda_items ADD COLUMN on_consent boolean NOT NULL DEFAULT false;
