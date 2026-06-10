@@ -211,6 +211,7 @@ async function insertParsed(opts: {
     cost_estimate: it.cost_estimate,
     cost_numeric: it.cost_numeric,
     plain_summary: it.plain_summary,
+    on_consent: it.on_consent,
     sort_order: idx,
   }));
   if (rows.length > 0) {
