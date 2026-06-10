@@ -312,7 +312,7 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({ itemId: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { findMatterByFile, getMatterAttachments, getMatterAgendaText, pickStaffReport, fetchAttachmentText } =
+    const { findMatterByFile, getMatterAttachments, pickStaffReport, fetchAttachmentText } =
       await import("@/lib/legistar.server");
 
     const { data: item, error } = await supabaseAdmin
