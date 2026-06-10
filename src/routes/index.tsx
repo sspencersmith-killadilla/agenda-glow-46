@@ -132,6 +132,35 @@ function Dashboard() {
             <Upload className="mr-2 h-4 w-4" /> Upload new agenda
           </Button>
         </Link>
+        {activeId && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              const a = agendas.find((x) => x.id === activeId);
+              if (!confirm(`Delete agenda "${a?.title}"? This cannot be undone.`)) return;
+              await delOne({ data: { id: activeId } });
+              setSelectedId(undefined);
+              qc.invalidateQueries({ queryKey: ["agendas"] });
+            }}
+          >
+            <Trash2 className="mr-2 h-4 w-4" /> Delete agenda
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-destructive hover:text-destructive"
+          onClick={async () => {
+            if (!confirm(`Delete ALL ${agendas.length} agendas? This cannot be undone.`)) return;
+            await delAll({});
+            setSelectedId(undefined);
+            qc.invalidateQueries({ queryKey: ["agendas"] });
+            router.invalidate();
+          }}
+        >
+          <Trash2 className="mr-2 h-4 w-4" /> Delete all
+        </Button>
       </div>
       {activeId && <AgendaDashboard agendaId={activeId} />}
     </Shell>
