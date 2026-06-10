@@ -313,7 +313,7 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({ itemId: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { findMatterByFile, getMatterAttachments, pickStaffReport, fetchAttachmentText } =
+    const { findMatterByFile, getMatterAttachments, pickStaffReport, fetchAttachmentText, buildMatterUrl } =
       await import("@/lib/legistar.server");
 
     const { data: item, error } = await supabaseAdmin
@@ -326,6 +326,8 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
 
     try {
       let matterId = item.matter_id as number | null;
+      let matterGuid = (item as { matter_guid?: string | null }).matter_guid ?? null;
+      let matterUrl = (item as { matter_url?: string | null }).matter_url ?? null;
       let matterShortName = item.matter_short_name as string | null;
       let matterStatus = item.matter_status as string | null;
       let attachments = (item.attachments as { name: string; url: string }[] | null) ?? [];
@@ -335,9 +337,13 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
         const matter = await findMatterByFile(item.item_number);
         if (matter) {
           matterId = matter.MatterId;
+          matterGuid = matter.MatterGuid ?? null;
           matterShortName = matter.MatterName;
           matterStatus = matter.MatterStatusName;
         }
+      }
+      if (matterId && !matterUrl) {
+        matterUrl = buildMatterUrl(matterId, matterGuid);
       }
 
       if (matterId && attachments.length === 0) {
