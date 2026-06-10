@@ -181,6 +181,7 @@ type ParsedItem = {
   cost_estimate: string | null;
   cost_numeric: number | null;
   plain_summary: string;
+  on_consent: boolean;
 };
 
 async function insertParsed(opts: {
