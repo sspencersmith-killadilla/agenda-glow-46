@@ -168,8 +168,9 @@ export const getItem = createServerFn({ method: "GET" })
       .from("agenda_items")
       .select("*, agendas(id,title,meeting_date)")
       .eq("id", data.id)
-      .single();
+      .maybeSingle();
     if (error) throw new Error(error.message);
+    if (!item) throw new Error("Item not found");
     return item;
   });
 
