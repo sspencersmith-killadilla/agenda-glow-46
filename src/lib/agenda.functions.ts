@@ -14,10 +14,11 @@ const ENRICH_INSTRUCTIONS = `You are reading a McKinney, TX City Council staff r
   "vendor": "contractor / company / counterparty named, or \"\"",
   "recommendation": "the staff recommendation in one sentence, or \"\"",
   "background": "2-3 sentence background of why this is before council",
-  "detailed_summary": "one-paragraph plain-language explanation for a resident, no jargon, no acronyms"
+  "detailed_summary": "one-paragraph plain-language explanation for a resident, no jargon, no acronyms",
+  "locations": ["array of specific street addresses or named places in McKinney, TX referenced by this item, e.g. '123 N Tennessee St, McKinney, TX' or 'McKinney National Airport'. Empty array if none. Do NOT include the generic city of McKinney or City Hall unless they are the actual subject."]
 }
 
-If a field is unknown, use an empty string (or 0 for cost_numeric). Do not invent numbers.`;
+If a field is unknown, use an empty string (or 0 for cost_numeric, [] for locations). Do not invent numbers or addresses.`;
 
 function extractJsonObject(text: string): Record<string, unknown> {
   let c = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
