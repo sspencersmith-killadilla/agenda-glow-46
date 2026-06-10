@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { generateText } from "ai";
-import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+import { getGeminiModel } from "@/lib/google-ai.server";
 import { SEED_AGENDA_TITLE, SEED_AGENDA_DATE, SEED_AGENDA_TEXT } from "@/lib/agenda-seed";
 
 const ENRICH_INSTRUCTIONS = `You are reading a McKinney, TX City Council staff report / ordinance / resolution document attached to an agenda item. Extract the key facts as JSON. Respond with ONLY a JSON object (no markdown fences, no commentary):
@@ -100,11 +100,8 @@ function normalizeItems(rawItems: unknown[]) {
 }
 
 async function callAIParser(agendaText: string) {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("Missing LOVABLE_API_KEY");
-  const gateway = createLovableAiGatewayProvider(key);
   const { text } = await generateText({
-    model: gateway("google/gemini-3-flash-preview"),
+    model: getGeminiModel(),
     prompt: `${PARSE_INSTRUCTIONS}\n\nAGENDA TEXT:\n${agendaText}`,
   });
   const items = normalizeItems(extractJsonArray(text));
@@ -275,11 +272,8 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("Missing LOVABLE_API_KEY");
-    const gateway = createLovableAiGatewayProvider(key);
     const { text } = await generateText({
-      model: gateway("google/gemini-3-flash-preview"),
+      model: getGeminiModel(),
       messages: [
         {
           role: "user",
@@ -317,10 +311,6 @@ async function callEnrichAI(opts: {
   files?: AiFilePart[];
   itemTitle: string;
 }) {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("Missing LOVABLE_API_KEY");
-  const gateway = createLovableAiGatewayProvider(key);
-
   const userParts: Array<
     | { type: "text"; text: string }
     | { type: "file"; mediaType: string; data: string }
@@ -337,7 +327,7 @@ async function callEnrichAI(opts: {
   }
 
   const { text } = await generateText({
-    model: gateway("google/gemini-3-flash-preview"),
+    model: getGeminiModel(),
     messages: [{ role: "user", content: userParts }],
   });
   return extractJsonObject(text);
