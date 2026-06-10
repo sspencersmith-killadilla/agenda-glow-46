@@ -408,10 +408,20 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
       const cost_estimate = str(parsed.cost_estimate) || item.cost_estimate;
       const cost_numeric = num(parsed.cost_numeric) ?? item.cost_numeric;
 
+      const locationsRaw = Array.isArray((parsed as { locations?: unknown }).locations)
+        ? ((parsed as { locations: unknown[] }).locations
+            .map((v) => (typeof v === "string" ? v.trim() : ""))
+            .filter((v) => v.length > 3 && v.length < 250))
+        : [];
+      // Dedupe
+      const locations = Array.from(new Set(locationsRaw)).slice(0, 10);
+
       const { error: uErr } = await supabaseAdmin
         .from("agenda_items")
         .update({
           matter_id: matterId,
+          matter_guid: matterGuid,
+          matter_url: matterUrl,
           matter_short_name: matterShortName,
           matter_status: matterStatus,
           attachments,
@@ -424,6 +434,7 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
           recommendation: str(parsed.recommendation) || null,
           background: str(parsed.background) || null,
           detailed_summary: str(parsed.detailed_summary) || null,
+          locations,
           enrichment_status: "done",
           enrichment_error: null,
           enriched_at: new Date().toISOString(),
