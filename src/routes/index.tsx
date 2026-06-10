@@ -153,9 +153,15 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function AgendaDashboard({ agendaId }: { agendaId: string }) {
   const fetchAgenda = useServerFn(getAgenda);
+  const enrich = useServerFn(enrichAgenda);
+  const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["agenda", agendaId],
     queryFn: () => fetchAgenda({ data: { id: agendaId } }),
+  });
+  const enrichMut = useMutation({
+    mutationFn: () => enrich({ data: { agendaId } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agenda", agendaId] }),
   });
 
   const [search, setSearch] = useState("");
