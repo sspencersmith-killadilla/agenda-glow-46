@@ -272,11 +272,8 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("Missing LOVABLE_API_KEY");
-    const gateway = createLovableAiGatewayProvider(key);
     const { text } = await generateText({
-      model: gateway("google/gemini-3-flash-preview"),
+      model: getGeminiModel(),
       messages: [
         {
           role: "user",
