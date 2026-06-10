@@ -168,7 +168,9 @@ function AgendaDashboard({ agendaId }: { agendaId: string }) {
   const [deptFilter, setDeptFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
 
-  const items = q.data?.items ?? [];
+  const allItems = q.data?.items ?? [];
+  // Exclude Minutes — they're not policy items and clutter the dashboard.
+  const items = allItems.filter((i) => i.item_type !== "Minutes");
 
   const departments = useMemo(
     () => Array.from(new Set(items.map((i) => i.department).filter(Boolean))).sort(),

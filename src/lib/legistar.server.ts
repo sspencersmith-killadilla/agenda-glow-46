@@ -7,6 +7,7 @@ const BASE = `https://webapi.legistar.com/v1/${CLIENT}`;
 
 export type LegistarMatter = {
   MatterId: number;
+  MatterGuid?: string | null;
   MatterFile: string;
   MatterName: string | null;
   MatterTitle: string | null;
@@ -22,6 +23,11 @@ export type LegistarAttachment = {
   MatterAttachmentHyperlink: string | null;
   MatterAttachmentFileName: string | null;
 };
+
+export function buildMatterUrl(matterId: number, guid?: string | null): string {
+  const base = `https://mckinney.legistar.com/LegislationDetail.aspx?ID=${matterId}`;
+  return guid ? `${base}&GUID=${guid}` : base;
+}
 
 export async function findMatterByFile(matterFile: string): Promise<LegistarMatter | null> {
   const url = `${BASE}/matters?$filter=${encodeURIComponent(`MatterFile eq '${matterFile}'`)}&$top=1`;

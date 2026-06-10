@@ -14,10 +14,11 @@ const ENRICH_INSTRUCTIONS = `You are reading a McKinney, TX City Council staff r
   "vendor": "contractor / company / counterparty named, or \"\"",
   "recommendation": "the staff recommendation in one sentence, or \"\"",
   "background": "2-3 sentence background of why this is before council",
-  "detailed_summary": "one-paragraph plain-language explanation for a resident, no jargon, no acronyms"
+  "detailed_summary": "one-paragraph plain-language explanation for a resident, no jargon, no acronyms",
+  "locations": ["array of specific street addresses or named places in McKinney, TX referenced by this item, e.g. '123 N Tennessee St, McKinney, TX' or 'McKinney National Airport'. Empty array if none. Do NOT include the generic city of McKinney or City Hall unless they are the actual subject."]
 }
 
-If a field is unknown, use an empty string (or 0 for cost_numeric). Do not invent numbers.`;
+If a field is unknown, use an empty string (or 0 for cost_numeric, [] for locations). Do not invent numbers or addresses.`;
 
 function extractJsonObject(text: string): Record<string, unknown> {
   let c = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
@@ -312,7 +313,7 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({ itemId: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { findMatterByFile, getMatterAttachments, pickStaffReport, fetchAttachmentText } =
+    const { findMatterByFile, getMatterAttachments, pickStaffReport, fetchAttachmentText, buildMatterUrl } =
       await import("@/lib/legistar.server");
 
     const { data: item, error } = await supabaseAdmin
@@ -325,6 +326,8 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
 
     try {
       let matterId = item.matter_id as number | null;
+      let matterGuid = (item as { matter_guid?: string | null }).matter_guid ?? null;
+      let matterUrl = (item as { matter_url?: string | null }).matter_url ?? null;
       let matterShortName = item.matter_short_name as string | null;
       let matterStatus = item.matter_status as string | null;
       let attachments = (item.attachments as { name: string; url: string }[] | null) ?? [];
@@ -334,9 +337,13 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
         const matter = await findMatterByFile(item.item_number);
         if (matter) {
           matterId = matter.MatterId;
+          matterGuid = matter.MatterGuid ?? null;
           matterShortName = matter.MatterName;
           matterStatus = matter.MatterStatusName;
         }
+      }
+      if (matterId && !matterUrl) {
+        matterUrl = buildMatterUrl(matterId, matterGuid);
       }
 
       if (matterId && attachments.length === 0) {
@@ -367,6 +374,8 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
           .from("agenda_items")
           .update({
             matter_id: matterId,
+            matter_guid: matterGuid,
+            matter_url: matterUrl,
             matter_short_name: matterShortName,
             matter_status: matterStatus,
             attachments,
@@ -399,10 +408,20 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
       const cost_estimate = str(parsed.cost_estimate) || item.cost_estimate;
       const cost_numeric = num(parsed.cost_numeric) ?? item.cost_numeric;
 
+      const locationsRaw = Array.isArray((parsed as { locations?: unknown }).locations)
+        ? ((parsed as { locations: unknown[] }).locations
+            .map((v) => (typeof v === "string" ? v.trim() : ""))
+            .filter((v) => v.length > 3 && v.length < 250))
+        : [];
+      // Dedupe
+      const locations = Array.from(new Set(locationsRaw)).slice(0, 10);
+
       const { error: uErr } = await supabaseAdmin
         .from("agenda_items")
         .update({
           matter_id: matterId,
+          matter_guid: matterGuid,
+          matter_url: matterUrl,
           matter_short_name: matterShortName,
           matter_status: matterStatus,
           attachments,
@@ -415,6 +434,7 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
           recommendation: str(parsed.recommendation) || null,
           background: str(parsed.background) || null,
           detailed_summary: str(parsed.detailed_summary) || null,
+          locations,
           enrichment_status: "done",
           enrichment_error: null,
           enriched_at: new Date().toISOString(),

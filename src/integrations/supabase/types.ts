@@ -31,9 +31,12 @@ export type Database = {
           id: string
           item_number: string | null
           item_type: string | null
+          locations: Json
+          matter_guid: string | null
           matter_id: number | null
           matter_short_name: string | null
           matter_status: string | null
+          matter_url: string | null
           plain_summary: string | null
           raw_title: string
           recommendation: string | null
@@ -57,9 +60,12 @@ export type Database = {
           id?: string
           item_number?: string | null
           item_type?: string | null
+          locations?: Json
+          matter_guid?: string | null
           matter_id?: number | null
           matter_short_name?: string | null
           matter_status?: string | null
+          matter_url?: string | null
           plain_summary?: string | null
           raw_title: string
           recommendation?: string | null
@@ -83,9 +89,12 @@ export type Database = {
           id?: string
           item_number?: string | null
           item_type?: string | null
+          locations?: Json
+          matter_guid?: string | null
           matter_id?: number | null
           matter_short_name?: string | null
           matter_status?: string | null
+          matter_url?: string | null
           plain_summary?: string | null
           raw_title?: string
           recommendation?: string | null
