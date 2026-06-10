@@ -8,6 +8,7 @@ import {
   enrichAgenda,
   deleteAgenda,
   deleteAllAgendas,
+  testGeminiConnection,
 } from "@/lib/agenda.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +41,7 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { Upload, FileText, Search, Sparkles, Trash2 } from "lucide-react";
+import { Upload, FileText, Search, Sparkles, Trash2, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -102,11 +103,14 @@ function Dashboard() {
               parse each item, identify departments, extract any disclosed costs, and write
               plain-language summaries.
             </p>
-            <Link to="/upload">
-              <Button>
-                <Upload className="mr-2 h-4 w-4" /> Upload an agenda
-              </Button>
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link to="/upload">
+                <Button>
+                  <Upload className="mr-2 h-4 w-4" /> Upload an agenda
+                </Button>
+              </Link>
+              <TestGeminiButton />
+            </div>
           </CardContent>
         </Card>
       </Shell>
@@ -162,9 +166,75 @@ function Dashboard() {
         >
           <Trash2 className="mr-2 h-4 w-4" /> Delete all
         </Button>
+        <TestGeminiButton />
       </div>
       {activeId && <AgendaDashboard agendaId={activeId} />}
     </Shell>
+  );
+}
+
+function TestGeminiButton() {
+  const test = useServerFn(testGeminiConnection);
+  const [state, setState] = useState<
+    | { status: "idle" }
+    | { status: "running" }
+    | { status: "ok"; ms: number; itemsParsed: number; usingOwnKey: boolean }
+    | { status: "error"; error: string; usingOwnKey: boolean }
+  >({ status: "idle" });
+
+  async function run() {
+    setState({ status: "running" });
+    try {
+      const r = await test({});
+      if (r.ok) {
+        setState({
+          status: "ok",
+          ms: r.ms,
+          itemsParsed: r.itemsParsed,
+          usingOwnKey: r.usingOwnKey,
+        });
+      } else {
+        setState({ status: "error", error: r.error, usingOwnKey: r.usingOwnKey });
+      }
+    } catch (err) {
+      setState({
+        status: "error",
+        error: err instanceof Error ? err.message : String(err),
+        usingOwnKey: false,
+      });
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={run}
+        disabled={state.status === "running"}
+      >
+        {state.status === "running" ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : state.status === "ok" ? (
+          <CheckCircle2 className="mr-2 h-4 w-4 text-green-600" />
+        ) : state.status === "error" ? (
+          <XCircle className="mr-2 h-4 w-4 text-destructive" />
+        ) : (
+          <Sparkles className="mr-2 h-4 w-4" />
+        )}
+        Test Gemini connection
+      </Button>
+      {state.status === "ok" && (
+        <span className="text-xs text-muted-foreground">
+          {state.usingOwnKey ? "Your key" : "Lovable fallback"} · parsed{" "}
+          {state.itemsParsed} item{state.itemsParsed === 1 ? "" : "s"} in{" "}
+          {state.ms} ms
+        </span>
+      )}
+      {state.status === "error" && (
+        <span className="text-xs text-destructive">{state.error}</span>
+      )}
+    </div>
   );
 }
 
