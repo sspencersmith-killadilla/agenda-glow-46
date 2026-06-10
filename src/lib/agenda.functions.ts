@@ -1,53 +1,86 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { generateObject } from "ai";
+import { generateText } from "ai";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 import { SEED_AGENDA_TITLE, SEED_AGENDA_DATE, SEED_AGENDA_TEXT } from "@/lib/agenda-seed";
 
-const ItemSchema = z.object({
-  item_number: z.string(),
-  raw_title: z.string(),
-  item_type: z.string(),
-  department: z.string(),
-  cost_estimate: z.string(),
-  cost_numeric: z.number(),
-  plain_summary: z.string(),
+const LenientItem = z.object({
+  item_number: z.coerce.string().nullish(),
+  raw_title: z.coerce.string().catch(""),
+  item_type: z.coerce.string().catch("Other"),
+  department: z.coerce.string().catch("Unknown"),
+  cost_estimate: z.coerce.string().nullish(),
+  cost_numeric: z.coerce.number().nullish().catch(null),
+  plain_summary: z.coerce.string().catch(""),
 });
 
-const ParseSchema = z.object({
-  items: z.array(ItemSchema),
-});
+const PARSE_INSTRUCTIONS = `Parse this McKinney, TX City Council meeting agenda. Extract EVERY numbered agenda item (skip section headers, invocations, public-comment blurbs, and procedural text).
 
-const PARSE_INSTRUCTIONS = `Parse this McKinney, TX City Council meeting agenda. Extract EVERY numbered agenda item (skip section headers, invocations, public-comment blurbs, and procedural text). Return JSON matching the schema.
+Respond with ONLY a JSON array (no markdown fences, no commentary). Each element:
+{
+  "item_number": "26-0563" or "",
+  "raw_title": "full original title",
+  "item_type": one of "Minutes" | "Ordinance" | "Resolution" | "Public Hearing" | "Election" | "Executive Session" | "Other",
+  "department": best guess owning City department (Parks & Recreation, Aviation, Public Works, Police, Fire, Planning, Finance, City Secretary, City Manager, Economic Development, Legal, IT, etc.),
+  "cost_estimate": dollar amount stated in the title like "$1,200,000", or "",
+  "cost_numeric": same cost as a plain number, or 0,
+  "plain_summary": "two-sentence plain-language explanation for a resident, no jargon"
+}`;
 
-Field rules — IMPORTANT: every field is required, use the empty string "" or 0 when unknown, NEVER null:
-- item_number: like "26-0563", or "" if none
-- raw_title: full original title
-- item_type: one of "Minutes", "Ordinance", "Resolution", "Public Hearing", "Election", "Executive Session", "Other"
-- department: best guess owning City department (Parks & Recreation, Aviation, Public Works, Police, Fire, Planning, Finance, City Secretary, City Manager, Economic Development, Legal, IT, etc.)
-- cost_estimate: dollar amount stated in the title like "$1,200,000", or "" if not stated
-- cost_numeric: same cost as plain number, or 0 if unknown
-- plain_summary: two-sentence plain-language explanation for a resident, no jargon`;
+function extractJsonArray(text: string): unknown[] {
+  let cleaned = text.trim();
+  // Strip markdown code fences if present
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+  // Find the outermost JSON array
+  const start = cleaned.indexOf("[");
+  const end = cleaned.lastIndexOf("]");
+  if (start === -1 || end === -1 || end <= start) {
+    // Maybe wrapped in an object like { "items": [...] }
+    try {
+      const obj = JSON.parse(cleaned);
+      if (obj && Array.isArray(obj.items)) return obj.items;
+    } catch {
+      /* fall through */
+    }
+    throw new Error("AI response did not contain a JSON array");
+  }
+  const parsed = JSON.parse(cleaned.slice(start, end + 1));
+  if (!Array.isArray(parsed)) throw new Error("AI response was not a JSON array");
+  return parsed;
+}
 
-function normalizeItems(items: z.infer<typeof ItemSchema>[]) {
-  return items.map((it) => ({
-    ...it,
-    item_number: it.item_number?.trim() || null,
-    cost_estimate: it.cost_estimate?.trim() || null,
-    cost_numeric: it.cost_numeric && it.cost_numeric > 0 ? it.cost_numeric : null,
-  }));
+function normalizeItems(rawItems: unknown[]) {
+  return rawItems
+    .map((raw) => {
+      const r = LenientItem.safeParse(raw);
+      if (!r.success) return null;
+      const it = r.data;
+      if (!it.raw_title.trim()) return null;
+      const costNum = typeof it.cost_numeric === "number" && it.cost_numeric > 0 ? it.cost_numeric : null;
+      return {
+        item_number: it.item_number?.trim() || null,
+        raw_title: it.raw_title.trim(),
+        item_type: it.item_type.trim() || "Other",
+        department: it.department.trim() || "Unknown",
+        cost_estimate: it.cost_estimate?.trim() || null,
+        cost_numeric: costNum,
+        plain_summary: it.plain_summary.trim(),
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
 }
 
 async function callAIParser(agendaText: string) {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("Missing LOVABLE_API_KEY");
   const gateway = createLovableAiGatewayProvider(key);
-  const { object } = await generateObject({
+  const { text } = await generateText({
     model: gateway("google/gemini-3-flash-preview"),
-    schema: ParseSchema,
     prompt: `${PARSE_INSTRUCTIONS}\n\nAGENDA TEXT:\n${agendaText}`,
   });
-  return normalizeItems(object.items);
+  const items = normalizeItems(extractJsonArray(text));
+  if (items.length === 0) throw new Error("No agenda items could be parsed");
+  return items;
 }
 
 export const listAgendas = createServerFn({ method: "GET" }).handler(async () => {
