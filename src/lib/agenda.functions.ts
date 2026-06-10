@@ -374,6 +374,8 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
           .from("agenda_items")
           .update({
             matter_id: matterId,
+            matter_guid: matterGuid,
+            matter_url: matterUrl,
             matter_short_name: matterShortName,
             matter_status: matterStatus,
             attachments,
