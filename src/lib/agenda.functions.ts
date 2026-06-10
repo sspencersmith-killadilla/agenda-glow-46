@@ -387,8 +387,9 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
         } else if (extracted.kind === "pdf") {
           files.push({ mediaType: "application/pdf", base64: extracted.base64 });
         } else if (extracted.kind === "doc") {
+          // Gemini doesn't accept application/msword as a file part, so only
+          // send the printable-strings text we extracted from the CFB binary.
           if (extracted.text) textChunks.push(extracted.text);
-          files.push({ mediaType: "application/msword", base64: extracted.base64 });
         }
       }
       const combinedText = textChunks.join("\n\n--- NEXT DOCUMENT ---\n\n");
