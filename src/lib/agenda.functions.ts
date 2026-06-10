@@ -311,10 +311,6 @@ async function callEnrichAI(opts: {
   files?: AiFilePart[];
   itemTitle: string;
 }) {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("Missing LOVABLE_API_KEY");
-  const gateway = createLovableAiGatewayProvider(key);
-
   const userParts: Array<
     | { type: "text"; text: string }
     | { type: "file"; mediaType: string; data: string }
@@ -331,7 +327,7 @@ async function callEnrichAI(opts: {
   }
 
   const { text } = await generateText({
-    model: gateway("google/gemini-3-flash-preview"),
+    model: getGeminiModel(),
     messages: [{ role: "user", content: userParts }],
   });
   return extractJsonObject(text);
