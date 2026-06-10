@@ -74,7 +74,6 @@ const TYPE_COLORS: Record<string, string> = {
 function Dashboard() {
   const router = useRouter();
   const qc = useQueryClient();
-  const seed = useServerFn(seedDefaultAgendaIfEmpty);
   const fetchAgendas = useServerFn(listAgendas);
   const delOne = useServerFn(deleteAgenda);
   const delAll = useServerFn(deleteAllAgendas);
@@ -84,17 +83,6 @@ function Dashboard() {
     queryFn: () => fetchAgendas(),
   });
 
-  // On first load, if no agendas, seed the bundled June 16 agenda.
-  const [seeding, setSeeding] = useState(false);
-  useEffect(() => {
-    if (agendasQ.data && agendasQ.data.length === 0 && !seeding) {
-      setSeeding(true);
-      seed({})
-        .then(() => router.invalidate())
-        .finally(() => setSeeding(false));
-    }
-  }, [agendasQ.data, seed, router, seeding]);
-
   const agendas = agendasQ.data ?? [];
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const activeId = selectedId ?? agendas[0]?.id;
@@ -102,12 +90,26 @@ function Dashboard() {
   if (agendasQ.isLoading) {
     return <Shell><div className="text-muted-foreground">Loading…</div></Shell>;
   }
-  if (seeding || (agendas.length === 0)) {
+  if (agendas.length === 0) {
     return (
       <Shell>
-        <div className="text-muted-foreground">
-          Parsing the June 16, 2026 agenda with AI — this takes ~20 seconds the first time…
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">No agendas yet</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Upload a McKinney City Council agenda PDF to get started. Lovable AI will
+              parse each item, identify departments, extract any disclosed costs, and write
+              plain-language summaries.
+            </p>
+            <Link to="/upload">
+              <Button>
+                <Upload className="mr-2 h-4 w-4" /> Upload an agenda
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </Shell>
     );
   }
