@@ -93,6 +93,7 @@ function normalizeItems(rawItems: unknown[]) {
         cost_estimate: it.cost_estimate?.trim() || null,
         cost_numeric: costNum,
         plain_summary: it.plain_summary.trim(),
+        on_consent: Boolean(it.on_consent),
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
