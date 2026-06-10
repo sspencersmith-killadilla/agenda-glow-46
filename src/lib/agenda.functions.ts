@@ -282,7 +282,13 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
 
 // ─────────────────────────── Enrichment via Legistar ───────────────────────────
 
-async function callEnrichAI(opts: { text?: string; pdfBase64?: string; itemTitle: string }) {
+type AiFilePart = { mediaType: string; base64: string };
+
+async function callEnrichAI(opts: {
+  text?: string;
+  files?: AiFilePart[];
+  itemTitle: string;
+}) {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("Missing LOVABLE_API_KEY");
   const gateway = createLovableAiGatewayProvider(key);
@@ -298,8 +304,8 @@ async function callEnrichAI(opts: { text?: string; pdfBase64?: string; itemTitle
       }`,
     },
   ];
-  if (opts.pdfBase64) {
-    userParts.push({ type: "file", mediaType: "application/pdf", data: opts.pdfBase64 });
+  for (const f of opts.files ?? []) {
+    userParts.push({ type: "file", mediaType: f.mediaType, data: f.base64 });
   }
 
   const { text } = await generateText({
@@ -313,7 +319,7 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({ itemId: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { findMatterByFile, getMatterAttachments, pickStaffReport, fetchAttachmentText, buildMatterUrl } =
+    const { findMatterByFile, getMatterAttachments, pickStaffReport, pickTopAttachments, fetchAttachmentText, buildMatterUrl } =
       await import("@/lib/legistar.server");
 
     const { data: item, error } = await supabaseAdmin
@@ -332,6 +338,7 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
       let matterStatus = item.matter_status as string | null;
       let attachments = (item.attachments as { name: string; url: string }[] | null) ?? [];
       let staffReportUrl = item.staff_report_url as string | null;
+      let rawAttachments: Awaited<ReturnType<typeof getMatterAttachments>> = [];
 
       if (!matterId && item.item_number) {
         const matter = await findMatterByFile(item.item_number);
@@ -346,30 +353,57 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
         matterUrl = buildMatterUrl(matterId, matterGuid);
       }
 
-      if (matterId && attachments.length === 0) {
-        const atts = await getMatterAttachments(matterId);
-        attachments = atts
-          .map((a) => ({
-            name: a.MatterAttachmentName ?? "Attachment",
-            url: a.MatterAttachmentHyperlink ?? "",
-          }))
-          .filter((a) => a.url);
-        const best = pickStaffReport(atts);
-        staffReportUrl = best?.MatterAttachmentHyperlink ?? attachments[0]?.url ?? null;
+      if (matterId) {
+        rawAttachments = await getMatterAttachments(matterId);
+        if (attachments.length === 0 && rawAttachments.length > 0) {
+          attachments = rawAttachments
+            .map((a) => ({
+              name: a.MatterAttachmentName ?? "Attachment",
+              url: a.MatterAttachmentHyperlink ?? "",
+            }))
+            .filter((a) => a.url);
+          const best = pickStaffReport(rawAttachments);
+          staffReportUrl = best?.MatterAttachmentHyperlink ?? attachments[0]?.url ?? null;
+        }
       }
 
-      // Pull the body text — try the staff report attachment first, fall back to /texts.
-      let docText: string | null = null;
-      let pdfBase64: string | null = null;
-      if (staffReportUrl) {
-        const extracted = await fetchAttachmentText(staffReportUrl);
-        if (extracted?.kind === "text") docText = extracted.text;
-        else if (extracted?.kind === "pdf") pdfBase64 = extracted.base64;
+      // Pull the body text — combine top 2 attachments (memo + contract/exhibit when present).
+      const topAtts = pickTopAttachments(rawAttachments, 2);
+      const urlsToFetch = topAtts
+        .map((a) => a.MatterAttachmentHyperlink)
+        .filter((u): u is string => Boolean(u));
+      // Always include staffReportUrl if we have it and somehow missed it.
+      if (staffReportUrl && !urlsToFetch.includes(staffReportUrl)) {
+        urlsToFetch.unshift(staffReportUrl);
       }
-      // (No /texts fallback — Legistar's /matters/{id}/texts requires POST and is rarely populated for McKinney.)
 
-      const hasContent = Boolean(docText || pdfBase64);
+      const textChunks: string[] = [];
+      const files: AiFilePart[] = [];
+      for (const url of urlsToFetch) {
+        const extracted = await fetchAttachmentText(url);
+        if (!extracted) continue;
+        if (extracted.kind === "text") {
+          textChunks.push(extracted.text);
+        } else if (extracted.kind === "pdf") {
+          files.push({ mediaType: "application/pdf", base64: extracted.base64 });
+        } else if (extracted.kind === "doc") {
+          if (extracted.text) textChunks.push(extracted.text);
+          files.push({ mediaType: "application/msword", base64: extracted.base64 });
+        }
+      }
+      const combinedText = textChunks.join("\n\n--- NEXT DOCUMENT ---\n\n");
+
+      const hasContent = Boolean(combinedText || files.length > 0);
       if (!hasContent) {
+        const onlyResolution =
+          attachments.length > 0 &&
+          attachments.every((a) => /resolution|ordinance/i.test(a.name)) &&
+          !attachments.some((a) => /memo|staff report|agreement|contract|exhibit/i.test(a.name));
+        const msg = attachments.length === 0
+          ? "No attachments posted on Legistar yet"
+          : onlyResolution
+            ? "Only a resolution/ordinance is posted — staff memo with cost not uploaded yet"
+            : "Could not extract text from any posted attachment";
         const { error: uErr } = await supabaseAdmin
           .from("agenda_items")
           .update({
@@ -381,7 +415,7 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
             attachments,
             staff_report_url: staffReportUrl,
             enrichment_status: "none",
-            enrichment_error: "No staff report or matter text found",
+            enrichment_error: msg,
             enriched_at: new Date().toISOString(),
           })
           .eq("id", item.id);
@@ -390,8 +424,8 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
       }
 
       const parsed = await callEnrichAI({
-        text: docText ?? undefined,
-        pdfBase64: pdfBase64 ?? undefined,
+        text: combinedText || undefined,
+        files: files.length > 0 ? files : undefined,
         itemTitle: item.raw_title,
       });
 
@@ -436,7 +470,9 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
           detailed_summary: str(parsed.detailed_summary) || null,
           locations,
           enrichment_status: "done",
-          enrichment_error: null,
+          enrichment_error: cost_numeric == null && !cost_estimate
+            ? "No dollar amount stated in the linked staff report or resolution"
+            : null,
           enriched_at: new Date().toISOString(),
         })
         .eq("id", item.id);

@@ -147,10 +147,17 @@ function ItemDetail() {
             <Field label="Item number" value={it.item_number || "—"} />
             <Field label="Type" value={it.item_type || "—"} />
             <Field label="Owning department" value={it.department || "—"} />
-            <Field
-              label="Cost"
-              value={it.cost_estimate || "Not disclosed"}
-            />
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Cost</div>
+              <div className="mt-1">{it.cost_estimate || "Not disclosed"}</div>
+              {!it.cost_estimate &&
+                (it.enrichment_status === "done" || it.enrichment_status === "none") &&
+                it.enrichment_error && (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {it.enrichment_error}.
+                  </div>
+                )}
+            </div>
           </CardContent>
         </Card>
 
