@@ -226,9 +226,8 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
     const key = process.env.LOVABLE_API_KEY;
     if (!key) throw new Error("Missing LOVABLE_API_KEY");
     const gateway = createLovableAiGatewayProvider(key);
-    const { object } = await generateObject({
+    const { text } = await generateText({
       model: gateway("google/gemini-3-flash-preview"),
-      schema: ParseSchema,
       messages: [
         {
           role: "user",
@@ -246,7 +245,8 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
         },
       ],
     });
-    const normalized = normalizeItems(object.items);
+    const normalized = normalizeItems(extractJsonArray(text));
+    if (normalized.length === 0) throw new Error("No agenda items could be parsed from the PDF");
     const agenda = await insertParsed({
       title: data.title,
       meetingDate: data.meetingDate ?? null,
