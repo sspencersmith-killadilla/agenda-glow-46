@@ -103,11 +103,14 @@ function Dashboard() {
               parse each item, identify departments, extract any disclosed costs, and write
               plain-language summaries.
             </p>
-            <Link to="/upload">
-              <Button>
-                <Upload className="mr-2 h-4 w-4" /> Upload an agenda
-              </Button>
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link to="/upload">
+                <Button>
+                  <Upload className="mr-2 h-4 w-4" /> Upload an agenda
+                </Button>
+              </Link>
+              <TestGeminiButton />
+            </div>
           </CardContent>
         </Card>
       </Shell>
