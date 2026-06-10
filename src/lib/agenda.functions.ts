@@ -5,52 +5,49 @@ import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 import { SEED_AGENDA_TITLE, SEED_AGENDA_DATE, SEED_AGENDA_TEXT } from "@/lib/agenda-seed";
 
 const ItemSchema = z.object({
-  item_number: z.string().nullable().describe("The agenda item number like 26-0563, or null"),
-  raw_title: z.string().describe("The full original item title as written in the agenda"),
-  item_type: z.enum([
-    "Minutes",
-    "Ordinance",
-    "Resolution",
-    "Public Hearing",
-    "Election",
-    "Executive Session",
-    "Other",
-  ]),
-  department: z.string().describe(
-    "Best guess at the owning City department: Parks & Recreation, Aviation (Airport), Public Works / Engineering, Police, Fire / Emergency Management, Planning, Finance, City Secretary, City Manager, Economic Development, Legal, IT, or other.",
-  ),
-  cost_estimate: z
-    .string()
-    .nullable()
-    .describe("Dollar amount stated in the title, e.g. '$1,200,000'. Null if not stated."),
-  cost_numeric: z
-    .number()
-    .nullable()
-    .describe("Same cost as a plain number, no symbols. Null if unknown."),
-  plain_summary: z
-    .string()
-    .describe(
-      "Two-sentence plain-language explanation for a resident: what this item is and why it matters. No jargon.",
-    ),
+  item_number: z.string(),
+  raw_title: z.string(),
+  item_type: z.string(),
+  department: z.string(),
+  cost_estimate: z.string(),
+  cost_numeric: z.number(),
+  plain_summary: z.string(),
 });
 
 const ParseSchema = z.object({
   items: z.array(ItemSchema),
 });
 
+const PARSE_INSTRUCTIONS = `Parse this McKinney, TX City Council meeting agenda. Extract EVERY numbered agenda item (skip section headers, invocations, public-comment blurbs, and procedural text). Return JSON matching the schema.
+
+Field rules — IMPORTANT: every field is required, use the empty string "" or 0 when unknown, NEVER null:
+- item_number: like "26-0563", or "" if none
+- raw_title: full original title
+- item_type: one of "Minutes", "Ordinance", "Resolution", "Public Hearing", "Election", "Executive Session", "Other"
+- department: best guess owning City department (Parks & Recreation, Aviation, Public Works, Police, Fire, Planning, Finance, City Secretary, City Manager, Economic Development, Legal, IT, etc.)
+- cost_estimate: dollar amount stated in the title like "$1,200,000", or "" if not stated
+- cost_numeric: same cost as plain number, or 0 if unknown
+- plain_summary: two-sentence plain-language explanation for a resident, no jargon`;
+
+function normalizeItems(items: z.infer<typeof ItemSchema>[]) {
+  return items.map((it) => ({
+    ...it,
+    item_number: it.item_number?.trim() || null,
+    cost_estimate: it.cost_estimate?.trim() || null,
+    cost_numeric: it.cost_numeric && it.cost_numeric > 0 ? it.cost_numeric : null,
+  }));
+}
+
 async function callAIParser(agendaText: string) {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("Missing LOVABLE_API_KEY");
   const gateway = createLovableAiGatewayProvider(key);
   const { object } = await generateObject({
-    model: gateway("google/gemini-2.5-flash"),
+    model: gateway("google/gemini-3-flash-preview"),
     schema: ParseSchema,
-    prompt: `You are parsing a McKinney, TX City Council meeting agenda. Extract EVERY numbered agenda item (skip section headers, invocations, public-comment blurbs, and procedural text). For each item, infer the most likely owning City department from the title, extract any dollar amount stated, and write a two-sentence plain-language summary a resident can understand. If no cost is stated, leave it null. Items also include the Executive Session topics — mark those as Executive Session type with department "Legal".
-
-AGENDA TEXT:
-${agendaText}`,
+    prompt: `${PARSE_INSTRUCTIONS}\n\nAGENDA TEXT:\n${agendaText}`,
   });
-  return object.items;
+  return normalizeItems(object.items);
 }
 
 export const listAgendas = createServerFn({ method: "GET" }).handler(async () => {
@@ -94,11 +91,21 @@ export const getItem = createServerFn({ method: "GET" })
     return item;
   });
 
+type ParsedItem = {
+  item_number: string | null;
+  raw_title: string;
+  item_type: string;
+  department: string;
+  cost_estimate: string | null;
+  cost_numeric: number | null;
+  plain_summary: string;
+};
+
 async function insertParsed(opts: {
   title: string;
   meetingDate: string | null;
   sourceFilename: string | null;
-  items: z.infer<typeof ItemSchema>[];
+  items: ParsedItem[];
 }) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: agenda, error: aErr } = await supabaseAdmin
@@ -187,7 +194,7 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
     if (!key) throw new Error("Missing LOVABLE_API_KEY");
     const gateway = createLovableAiGatewayProvider(key);
     const { object } = await generateObject({
-      model: gateway("google/gemini-2.5-flash"),
+      model: gateway("google/gemini-3-flash-preview"),
       schema: ParseSchema,
       messages: [
         {
@@ -195,7 +202,7 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
           content: [
             {
               type: "text",
-              text: "Parse this McKinney City Council meeting agenda PDF. Extract every numbered agenda item (skip section headers and procedural text). For each item infer the owning City department, extract any dollar amount stated, and write a two-sentence plain-language summary for a resident.",
+              text: PARSE_INSTRUCTIONS,
             },
             {
               type: "file",
@@ -206,11 +213,12 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
         },
       ],
     });
+    const normalized = normalizeItems(object.items);
     const agenda = await insertParsed({
       title: data.title,
       meetingDate: data.meetingDate ?? null,
       sourceFilename: data.sourceFilename ?? null,
-      items: object.items,
+      items: normalized,
     });
-    return { agendaId: agenda.id, itemCount: object.items.length };
+    return { agendaId: agenda.id, itemCount: normalized.length };
   });
