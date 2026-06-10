@@ -118,18 +118,58 @@ export type ExtractedAttachment =
   | { kind: "pdf"; base64: string }
   | { kind: "doc"; text: string; base64: string };
 
+
+type Kind = "pdf" | "docx" | "doc" | "unknown";
+
+function filenameFromDisposition(cd: string | null): string {
+  if (!cd) return "";
+  const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd);
+  return m ? decodeURIComponent(m[1]).toLowerCase() : "";
+}
+
+function detectKind(buf: Uint8Array, contentType: string, filename: string, url: string): Kind {
+  // Magic bytes — most reliable
+  if (buf.length >= 4) {
+    if (buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) return "pdf";
+    if (buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04) {
+      // ZIP — verify it's a DOCX by looking for word/document.xml
+      try {
+        const entries = unzipSync(buf, { filter: (f) => f.name === "word/document.xml" });
+        if (entries["word/document.xml"]) return "docx";
+      } catch {
+        /* fall through */
+      }
+      return "unknown";
+    }
+    if (buf[0] === 0xd0 && buf[1] === 0xcf && buf[2] === 0x11 && buf[3] === 0xe0) return "doc";
+  }
+  // Content-Type fallback
+  const ct = contentType.toLowerCase();
+  if (ct.includes("application/pdf")) return "pdf";
+  if (ct.includes("wordprocessingml")) return "docx";
+  if (ct.includes("application/msword")) return "doc";
+  // Filename / URL extension last resort
+  const name = filename || url.toLowerCase();
+  if (name.endsWith(".pdf")) return "pdf";
+  if (name.endsWith(".docx")) return "docx";
+  if (name.endsWith(".doc")) return "doc";
+  return "unknown";
+}
+
 /** Fetch attachment bytes + extract plain text. Supports .docx, .pdf, and legacy .doc. */
 export async function fetchAttachmentText(url: string): Promise<ExtractedAttachment | null> {
   const res = await fetch(url);
   if (!res.ok) return null;
   const buf = new Uint8Array(await res.arrayBuffer());
-  const lower = url.toLowerCase();
+  const contentType = res.headers.get("content-type") ?? "";
+  const filename = filenameFromDisposition(res.headers.get("content-disposition"));
+  const kind = detectKind(buf, contentType, filename, url);
 
-  if (lower.endsWith(".pdf")) {
+  if (kind === "pdf") {
     return { kind: "pdf", base64: bytesToBase64(buf) };
   }
 
-  if (lower.endsWith(".docx")) {
+  if (kind === "docx") {
     try {
       const entries = unzipSync(buf, { filter: (f) => f.name === "word/document.xml" });
       const xml = entries["word/document.xml"];
@@ -154,13 +194,13 @@ export async function fetchAttachmentText(url: string): Promise<ExtractedAttachm
     }
   }
 
-  if (lower.endsWith(".doc")) {
-    // Legacy Word 97-2003 binary (CFB). No reliable pure-JS parser, so:
-    //  - extract printable strings as a noisy-but-usable text fallback
-    //  - also send the raw bytes to the AI as application/msword
+  if (kind === "doc") {
+    // Legacy Word 97-2003 binary (CFB). Extract printable strings as a noisy-but-usable
+    // text fallback and also send raw bytes to the AI as application/msword.
     const text = extractPrintableStrings(buf);
     return { kind: "doc", text, base64: bytesToBase64(buf) };
   }
 
   return null;
 }
+
