@@ -14,7 +14,80 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      agenda_items: {
+        Row: {
+          agenda_id: string
+          cost_estimate: string | null
+          cost_numeric: number | null
+          created_at: string
+          department: string | null
+          id: string
+          item_number: string | null
+          item_type: string | null
+          plain_summary: string | null
+          raw_title: string
+          sort_order: number
+        }
+        Insert: {
+          agenda_id: string
+          cost_estimate?: string | null
+          cost_numeric?: number | null
+          created_at?: string
+          department?: string | null
+          id?: string
+          item_number?: string | null
+          item_type?: string | null
+          plain_summary?: string | null
+          raw_title: string
+          sort_order?: number
+        }
+        Update: {
+          agenda_id?: string
+          cost_estimate?: string | null
+          cost_numeric?: number | null
+          created_at?: string
+          department?: string | null
+          id?: string
+          item_number?: string | null
+          item_type?: string | null
+          plain_summary?: string | null
+          raw_title?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agenda_items_agenda_id_fkey"
+            columns: ["agenda_id"]
+            isOneToOne: false
+            referencedRelation: "agendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agendas: {
+        Row: {
+          created_at: string
+          id: string
+          meeting_date: string | null
+          source_filename: string | null
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meeting_date?: string | null
+          source_filename?: string | null
+          title: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meeting_date?: string | null
+          source_filename?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
