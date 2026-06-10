@@ -4,6 +4,29 @@ import { generateText } from "ai";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 import { SEED_AGENDA_TITLE, SEED_AGENDA_DATE, SEED_AGENDA_TEXT } from "@/lib/agenda-seed";
 
+const ENRICH_INSTRUCTIONS = `You are reading a McKinney, TX City Council staff report / ordinance / resolution document attached to an agenda item. Extract the key facts as JSON. Respond with ONLY a JSON object (no markdown fences, no commentary):
+
+{
+  "department": "owning City department, e.g. Parks & Recreation, Aviation, Public Works",
+  "cost_estimate": "primary dollar amount as written, like $1,234,567, or \"\" if none",
+  "cost_numeric": same cost as plain number, or 0,
+  "funding_source": "which fund/budget pays for this, or \"\"",
+  "vendor": "contractor / company / counterparty named, or \"\"",
+  "recommendation": "the staff recommendation in one sentence, or \"\"",
+  "background": "2-3 sentence background of why this is before council",
+  "detailed_summary": "one-paragraph plain-language explanation for a resident, no jargon, no acronyms"
+}
+
+If a field is unknown, use an empty string (or 0 for cost_numeric). Do not invent numbers.`;
+
+function extractJsonObject(text: string): Record<string, unknown> {
+  let c = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+  const s = c.indexOf("{");
+  const e = c.lastIndexOf("}");
+  if (s === -1 || e === -1 || e <= s) throw new Error("AI response was not a JSON object");
+  return JSON.parse(c.slice(s, e + 1));
+}
+
 const LenientItem = z.object({
   item_number: z.coerce.string().nullish(),
   raw_title: z.coerce.string().catch(""),
