@@ -17,42 +17,81 @@ export type Database = {
       agenda_items: {
         Row: {
           agenda_id: string
+          attachments: Json
+          background: string | null
           cost_estimate: string | null
           cost_numeric: number | null
           created_at: string
           department: string | null
+          detailed_summary: string | null
+          enriched_at: string | null
+          enrichment_error: string | null
+          enrichment_status: string
+          funding_source: string | null
           id: string
           item_number: string | null
           item_type: string | null
+          matter_id: number | null
+          matter_short_name: string | null
+          matter_status: string | null
           plain_summary: string | null
           raw_title: string
+          recommendation: string | null
           sort_order: number
+          staff_report_url: string | null
+          vendor: string | null
         }
         Insert: {
           agenda_id: string
+          attachments?: Json
+          background?: string | null
           cost_estimate?: string | null
           cost_numeric?: number | null
           created_at?: string
           department?: string | null
+          detailed_summary?: string | null
+          enriched_at?: string | null
+          enrichment_error?: string | null
+          enrichment_status?: string
+          funding_source?: string | null
           id?: string
           item_number?: string | null
           item_type?: string | null
+          matter_id?: number | null
+          matter_short_name?: string | null
+          matter_status?: string | null
           plain_summary?: string | null
           raw_title: string
+          recommendation?: string | null
           sort_order?: number
+          staff_report_url?: string | null
+          vendor?: string | null
         }
         Update: {
           agenda_id?: string
+          attachments?: Json
+          background?: string | null
           cost_estimate?: string | null
           cost_numeric?: number | null
           created_at?: string
           department?: string | null
+          detailed_summary?: string | null
+          enriched_at?: string | null
+          enrichment_error?: string | null
+          enrichment_status?: string
+          funding_source?: string | null
           id?: string
           item_number?: string | null
           item_type?: string | null
+          matter_id?: number | null
+          matter_short_name?: string | null
+          matter_status?: string | null
           plain_summary?: string | null
           raw_title?: string
+          recommendation?: string | null
           sort_order?: number
+          staff_report_url?: string | null
+          vendor?: string | null
         }
         Relationships: [
           {
