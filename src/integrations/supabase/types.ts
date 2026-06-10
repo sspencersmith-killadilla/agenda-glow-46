@@ -37,6 +37,7 @@ export type Database = {
           matter_short_name: string | null
           matter_status: string | null
           matter_url: string | null
+          on_consent: boolean
           plain_summary: string | null
           raw_title: string
           recommendation: string | null
@@ -66,6 +67,7 @@ export type Database = {
           matter_short_name?: string | null
           matter_status?: string | null
           matter_url?: string | null
+          on_consent?: boolean
           plain_summary?: string | null
           raw_title: string
           recommendation?: string | null
@@ -95,6 +97,7 @@ export type Database = {
           matter_short_name?: string | null
           matter_status?: string | null
           matter_url?: string | null
+          on_consent?: boolean
           plain_summary?: string | null
           raw_title?: string
           recommendation?: string | null
