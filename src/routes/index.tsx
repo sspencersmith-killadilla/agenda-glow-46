@@ -39,7 +39,7 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { Upload, FileText, Search } from "lucide-react";
+import { Upload, FileText, Search, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
