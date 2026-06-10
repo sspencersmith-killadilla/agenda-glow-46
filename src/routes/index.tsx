@@ -212,10 +212,30 @@ function AgendaDashboard({ agendaId }: { agendaId: string }) {
     return Array.from(map, ([type, count]) => ({ type, count }));
   }, [items]);
 
+  const enrichedCount = items.filter((i) => i.enrichment_status === "done").length;
+  const pendingCount = items.filter((i) => i.enrichment_status === "pending").length;
+
   if (q.isLoading) return <div className="text-muted-foreground">Loading agenda…</div>;
 
   return (
     <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm text-muted-foreground">
+          Staff reports parsed: <span className="font-medium text-foreground">{enrichedCount}</span> of {items.length}
+          {enrichMut.isPending && " · reading staff reports…"}
+        </div>
+        <Button
+          size="sm"
+          onClick={() => enrichMut.mutate()}
+          disabled={enrichMut.isPending || pendingCount === 0}
+        >
+          <Sparkles className="mr-2 h-4 w-4" />
+          {pendingCount === 0
+            ? "All items enriched"
+            : `Fetch ${pendingCount} staff report${pendingCount === 1 ? "" : "s"}`}
+        </Button>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-4">
         <Stat label="Total items" value={items.length.toString()} />
         <Stat label="With disclosed cost" value={`${disclosed} of ${items.length}`} />
