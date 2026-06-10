@@ -1,25 +1,32 @@
-## Problem
+# Use your own Gemini API key for PDF parsing
 
-`fetchAttachmentText` in `src/lib/legistar.server.ts` decides how to parse an attachment by checking `url.toLowerCase().endsWith(".docx" | ".pdf" | ".doc")`. McKinney's Legistar links are `View.ashx?M=F&ID=...&GUID=...` with no extension, so every attachment falls through to `return null` — including DOCX, PDF, and DOC.
+Right now every AI call (PDF parsing, staff-report extraction, item enrichment) goes through Lovable AI Gateway and draws from your Lovable workspace credits. When credits run out you see the "payment required" error.
 
-## Fix
+This plan switches those calls to use **your own Google AI Studio Gemini API key** so they bill directly to your Google account and never touch Lovable credits.
 
-Replace URL-extension sniffing with response-driven detection inside `fetchAttachmentText`:
+## Steps
 
-1. After `fetch(url)`, read:
-   - `Content-Type` header (e.g. `application/pdf`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, `application/msword`)
-   - `Content-Disposition` filename (e.g. `filename="StaffReport.docx"`) as a secondary hint
-2. Read the body once into `Uint8Array`, then check magic bytes:
-   - `%PDF` (`0x25 50 44 46`) → PDF
-   - `PK\x03\x04` (`0x50 4B 03 04`) → ZIP container. Confirm it's DOCX by checking the central directory for `word/document.xml` (we already `unzipSync` — just gate the docx branch on that entry existing instead of trusting the extension). If it's a ZIP but not DOCX (e.g. an `.xlsx`/`.zip`), return null.
-   - `\xD0\xCF\x11\xE0` (CFB header) → legacy `.doc` (also covers `.xls`/`.ppt`; accept as `doc` since strings-extraction is format-agnostic and Gemini can still try)
-3. Resolution order: magic bytes win, content-type is the tiebreaker, filename/extension is last resort. This keeps us correct when servers send `application/octet-stream`.
-4. Keep the existing parsing branches (`pdf`, `docx`, `doc`) — only the detection step changes. Same `ExtractedAttachment` return shape.
+1. **Add the secret.** I'll prompt you to paste `GEMINI_API_KEY` into Lovable's secure secret form (the same key you use on your other project — grab it from https://aistudio.google.com/apikey if you don't have it handy).
 
-## Files
+2. **Install the Google provider package.** Add `@ai-sdk/google` so the AI SDK can talk to Google's API directly (same surface as the Lovable provider; `generateText`/`Output.object` keep working unchanged).
 
-- `src/lib/legistar.server.ts` — rewrite the detection block at the top of `fetchAttachmentText`; extract a small `detectKind(buf, headers, url)` helper for clarity.
+3. **Add a Google provider helper.** Create `src/lib/google-ai.server.ts` exporting `createGoogleProvider()` that reads `process.env.GEMINI_API_KEY` and returns the Google provider.
 
-## Out of scope
+4. **Switch the three AI calls in `src/lib/agenda.functions.ts`** from `gateway("google/gemini-3-flash-preview")` to `google("gemini-2.5-flash")` (Google's direct API uses bare model names — `gemini-3-flash-preview` is a Lovable-only alias). Affects:
+   - `callAIParser` (PDF parsing)
+   - `extractStaffReportFields` (staff report enrichment)
+   - the agenda-item enrichment loop
 
-No changes to `agenda.functions.ts`, UI, or DB. After this lands, the existing "Re-read staff report" button will pick up DOCX attachments that previously returned null.
+5. **Keep a graceful fallback.** If `GEMINI_API_KEY` is missing, fall back to the Lovable gateway so nothing breaks for future contributors. If both are missing, surface a clear error.
+
+## What stays the same
+
+- All Zod schemas, prompts, parsing logic, and the dashboard UI.
+- Lovable Cloud (database, auth) is unchanged.
+- The image-generation / other Lovable features (if any added later) still use `LOVABLE_API_KEY`.
+
+## Cost note
+
+Google's Gemini API has a generous free tier (`gemini-2.5-flash` is free up to daily limits) and pay-as-you-go beyond that — billed to your Google account, not Lovable.
+
+Ready to switch to build mode and add the key?
