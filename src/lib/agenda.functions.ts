@@ -36,9 +36,12 @@ const LenientItem = z.object({
   cost_estimate: z.coerce.string().nullish(),
   cost_numeric: z.coerce.number().nullish().catch(null),
   plain_summary: z.coerce.string().catch(""),
+  on_consent: z.coerce.boolean().catch(false),
 });
 
 const PARSE_INSTRUCTIONS = `Parse this McKinney, TX City Council meeting agenda. Extract EVERY numbered agenda item (skip section headers, invocations, public-comment blurbs, and procedural text).
+
+The agenda is divided into sections. Items appearing under a heading like "CONSENT AGENDA", "CONSENT MINUTES", "CONSENT ORDINANCES", or "CONSENT RESOLUTIONS" are on the consent agenda (passed in one vote with no debate). Items under "INDIVIDUAL CONSIDERATION", "PUBLIC HEARINGS", or similar are NOT on consent.
 
 Respond with ONLY a JSON array (no markdown fences, no commentary). Each element:
 {
@@ -48,7 +51,8 @@ Respond with ONLY a JSON array (no markdown fences, no commentary). Each element
   "department": best guess owning City department (Parks & Recreation, Aviation, Public Works, Police, Fire, Planning, Finance, City Secretary, City Manager, Economic Development, Legal, IT, etc.),
   "cost_estimate": dollar amount stated in the title like "$1,200,000", or "",
   "cost_numeric": same cost as a plain number, or 0,
-  "plain_summary": "two-sentence plain-language explanation for a resident, no jargon"
+  "plain_summary": "two-sentence plain-language explanation for a resident, no jargon",
+  "on_consent": true if this item appears under a CONSENT section, false otherwise
 }`;
 
 function extractJsonArray(text: string): unknown[] {
