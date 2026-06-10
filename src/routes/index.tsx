@@ -73,8 +73,11 @@ const TYPE_COLORS: Record<string, string> = {
 
 function Dashboard() {
   const router = useRouter();
+  const qc = useQueryClient();
   const seed = useServerFn(seedDefaultAgendaIfEmpty);
   const fetchAgendas = useServerFn(listAgendas);
+  const delOne = useServerFn(deleteAgenda);
+  const delAll = useServerFn(deleteAllAgendas);
 
   const agendasQ = useQuery({
     queryKey: ["agendas"],
