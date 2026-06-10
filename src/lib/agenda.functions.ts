@@ -194,7 +194,7 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
     if (!key) throw new Error("Missing LOVABLE_API_KEY");
     const gateway = createLovableAiGatewayProvider(key);
     const { object } = await generateObject({
-      model: gateway("google/gemini-2.5-flash"),
+      model: gateway("google/gemini-3-flash-preview"),
       schema: ParseSchema,
       messages: [
         {
@@ -202,7 +202,7 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
           content: [
             {
               type: "text",
-              text: "Parse this McKinney City Council meeting agenda PDF. Extract every numbered agenda item (skip section headers and procedural text). For each item infer the owning City department, extract any dollar amount stated, and write a two-sentence plain-language summary for a resident.",
+              text: PARSE_INSTRUCTIONS,
             },
             {
               type: "file",
@@ -213,11 +213,12 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
         },
       ],
     });
+    const normalized = normalizeItems(object.items);
     const agenda = await insertParsed({
       title: data.title,
       meetingDate: data.meetingDate ?? null,
       sourceFilename: data.sourceFilename ?? null,
-      items: object.items,
+      items: normalized,
     });
-    return { agendaId: agenda.id, itemCount: object.items.length };
+    return { agendaId: agenda.id, itemCount: normalized.length };
   });
