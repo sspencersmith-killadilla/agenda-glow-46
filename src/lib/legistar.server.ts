@@ -118,12 +118,6 @@ export type ExtractedAttachment =
   | { kind: "pdf"; base64: string }
   | { kind: "doc"; text: string; base64: string };
 
-/** Fetch attachment bytes + extract plain text. Supports .docx, .pdf, and legacy .doc. */
-export async function fetchAttachmentText(url: string): Promise<ExtractedAttachment | null> {
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  const buf = new Uint8Array(await res.arrayBuffer());
-  const lower = url.toLowerCase();
 
 type Kind = "pdf" | "docx" | "doc" | "unknown";
 
