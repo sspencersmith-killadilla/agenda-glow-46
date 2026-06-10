@@ -278,3 +278,198 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
     });
     return { agendaId: agenda.id, itemCount: normalized.length };
   });
+
+// ─────────────────────────── Enrichment via Legistar ───────────────────────────
+
+async function callEnrichAI(opts: { text?: string; pdfBase64?: string; itemTitle: string }) {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) throw new Error("Missing LOVABLE_API_KEY");
+  const gateway = createLovableAiGatewayProvider(key);
+
+  const userParts: Array<
+    | { type: "text"; text: string }
+    | { type: "file"; mediaType: string; data: string }
+  > = [
+    {
+      type: "text",
+      text: `${ENRICH_INSTRUCTIONS}\n\nAGENDA ITEM TITLE: ${opts.itemTitle}\n${
+        opts.text ? `\nDOCUMENT TEXT:\n${opts.text.slice(0, 120_000)}` : ""
+      }`,
+    },
+  ];
+  if (opts.pdfBase64) {
+    userParts.push({ type: "file", mediaType: "application/pdf", data: opts.pdfBase64 });
+  }
+
+  const { text } = await generateText({
+    model: gateway("google/gemini-3-flash-preview"),
+    messages: [{ role: "user", content: userParts }],
+  });
+  return extractJsonObject(text);
+}
+
+export const enrichAgendaItem = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => z.object({ itemId: z.string().uuid() }).parse(input))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { findMatterByFile, getMatterAttachments, getMatterAgendaText, pickStaffReport, fetchAttachmentText } =
+      await import("@/lib/legistar.server");
+
+    const { data: item, error } = await supabaseAdmin
+      .from("agenda_items")
+      .select("*")
+      .eq("id", data.itemId)
+      .single();
+    if (error) throw new Error(error.message);
+    if (!item) throw new Error("Item not found");
+
+    try {
+      let matterId = item.matter_id as number | null;
+      let matterShortName = item.matter_short_name as string | null;
+      let matterStatus = item.matter_status as string | null;
+      let attachments = (item.attachments as { name: string; url: string }[] | null) ?? [];
+      let staffReportUrl = item.staff_report_url as string | null;
+
+      if (!matterId && item.item_number) {
+        const matter = await findMatterByFile(item.item_number);
+        if (matter) {
+          matterId = matter.MatterId;
+          matterShortName = matter.MatterName;
+          matterStatus = matter.MatterStatusName;
+        }
+      }
+
+      if (matterId && attachments.length === 0) {
+        const atts = await getMatterAttachments(matterId);
+        attachments = atts
+          .map((a) => ({
+            name: a.MatterAttachmentName ?? "Attachment",
+            url: a.MatterAttachmentHyperlink ?? "",
+          }))
+          .filter((a) => a.url);
+        const best = pickStaffReport(atts);
+        staffReportUrl = best?.MatterAttachmentHyperlink ?? attachments[0]?.url ?? null;
+      }
+
+      // Pull the body text — try the staff report attachment first, fall back to /texts.
+      let docText: string | null = null;
+      let pdfBase64: string | null = null;
+      if (staffReportUrl) {
+        const extracted = await fetchAttachmentText(staffReportUrl);
+        if (extracted?.kind === "text") docText = extracted.text;
+        else if (extracted?.kind === "pdf") pdfBase64 = extracted.base64;
+      }
+      if (!docText && !pdfBase64 && matterId) {
+        docText = await getMatterAgendaText(matterId);
+      }
+
+      const hasContent = Boolean(docText || pdfBase64);
+      if (!hasContent) {
+        const { error: uErr } = await supabaseAdmin
+          .from("agenda_items")
+          .update({
+            matter_id: matterId,
+            matter_short_name: matterShortName,
+            matter_status: matterStatus,
+            attachments,
+            staff_report_url: staffReportUrl,
+            enrichment_status: "none",
+            enrichment_error: "No staff report or matter text found",
+            enriched_at: new Date().toISOString(),
+          })
+          .eq("id", item.id);
+        if (uErr) throw new Error(uErr.message);
+        return { status: "none" as const };
+      }
+
+      const parsed = await callEnrichAI({
+        text: docText ?? undefined,
+        pdfBase64: pdfBase64 ?? undefined,
+        itemTitle: item.raw_title,
+      });
+
+      const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+      const num = (v: unknown) => {
+        if (typeof v === "number" && v > 0) return v;
+        if (typeof v === "string") {
+          const n = Number(v.replace(/[^0-9.]/g, ""));
+          return Number.isFinite(n) && n > 0 ? n : null;
+        }
+        return null;
+      };
+      const dept = str(parsed.department) || item.department;
+      const cost_estimate = str(parsed.cost_estimate) || item.cost_estimate;
+      const cost_numeric = num(parsed.cost_numeric) ?? item.cost_numeric;
+
+      const { error: uErr } = await supabaseAdmin
+        .from("agenda_items")
+        .update({
+          matter_id: matterId,
+          matter_short_name: matterShortName,
+          matter_status: matterStatus,
+          attachments,
+          staff_report_url: staffReportUrl,
+          department: dept,
+          cost_estimate,
+          cost_numeric,
+          funding_source: str(parsed.funding_source) || null,
+          vendor: str(parsed.vendor) || null,
+          recommendation: str(parsed.recommendation) || null,
+          background: str(parsed.background) || null,
+          detailed_summary: str(parsed.detailed_summary) || null,
+          enrichment_status: "done",
+          enrichment_error: null,
+          enriched_at: new Date().toISOString(),
+        })
+        .eq("id", item.id);
+      if (uErr) throw new Error(uErr.message);
+      return { status: "done" as const };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await supabaseAdmin
+        .from("agenda_items")
+        .update({
+          enrichment_status: "failed",
+          enrichment_error: msg.slice(0, 500),
+          enriched_at: new Date().toISOString(),
+        })
+        .eq("id", item.id);
+      return { status: "failed" as const, error: msg };
+    }
+  });
+
+export const enrichAgenda = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z.object({ agendaId: z.string().uuid(), limit: z.number().int().min(1).max(60).optional() }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: pending, error } = await supabaseAdmin
+      .from("agenda_items")
+      .select("id")
+      .eq("agenda_id", data.agendaId)
+      .eq("enrichment_status", "pending")
+      .order("sort_order", { ascending: true })
+      .limit(data.limit ?? 50);
+    if (error) throw new Error(error.message);
+    const ids = (pending ?? []).map((p) => p.id);
+
+    // Run with concurrency 3
+    const results = { done: 0, failed: 0, none: 0 };
+    const CONCURRENCY = 3;
+    let idx = 0;
+    async function worker() {
+      while (idx < ids.length) {
+        const myIdx = idx++;
+        const id = ids[myIdx];
+        try {
+          const r = await enrichAgendaItem({ data: { itemId: id } });
+          results[r.status] += 1;
+        } catch {
+          results.failed += 1;
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker));
+    return { processed: ids.length, ...results };
+  });
