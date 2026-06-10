@@ -7,6 +7,8 @@ import {
   getAgenda,
   seedDefaultAgendaIfEmpty,
   enrichAgenda,
+  deleteAgenda,
+  deleteAllAgendas,
 } from "@/lib/agenda.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +41,7 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { Upload, FileText, Search, Sparkles } from "lucide-react";
+import { Upload, FileText, Search, Sparkles, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -71,8 +73,11 @@ const TYPE_COLORS: Record<string, string> = {
 
 function Dashboard() {
   const router = useRouter();
+  const qc = useQueryClient();
   const seed = useServerFn(seedDefaultAgendaIfEmpty);
   const fetchAgendas = useServerFn(listAgendas);
+  const delOne = useServerFn(deleteAgenda);
+  const delAll = useServerFn(deleteAllAgendas);
 
   const agendasQ = useQuery({
     queryKey: ["agendas"],
@@ -127,6 +132,35 @@ function Dashboard() {
             <Upload className="mr-2 h-4 w-4" /> Upload new agenda
           </Button>
         </Link>
+        {activeId && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              const a = agendas.find((x) => x.id === activeId);
+              if (!confirm(`Delete agenda "${a?.title}"? This cannot be undone.`)) return;
+              await delOne({ data: { id: activeId } });
+              setSelectedId(undefined);
+              qc.invalidateQueries({ queryKey: ["agendas"] });
+            }}
+          >
+            <Trash2 className="mr-2 h-4 w-4" /> Delete agenda
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-destructive hover:text-destructive"
+          onClick={async () => {
+            if (!confirm(`Delete ALL ${agendas.length} agendas? This cannot be undone.`)) return;
+            await delAll({});
+            setSelectedId(undefined);
+            qc.invalidateQueries({ queryKey: ["agendas"] });
+            router.invalidate();
+          }}
+        >
+          <Trash2 className="mr-2 h-4 w-4" /> Delete all
+        </Button>
       </div>
       {activeId && <AgendaDashboard agendaId={activeId} />}
     </Shell>
