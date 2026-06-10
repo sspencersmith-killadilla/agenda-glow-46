@@ -1,44 +1,25 @@
-## Why 26-0575 has no cost today
+## Problem
 
-Two things stacked:
+`fetchAttachmentText` in `src/lib/legistar.server.ts` decides how to parse an attachment by checking `url.toLowerCase().endsWith(".docx" | ".pdf" | ".doc")`. McKinney's Legistar links are `View.ashx?M=F&ID=...&GUID=...` with no extension, so every attachment falls through to `return null` — including DOCX, PDF, and DOC.
 
-1. **We can't read `.doc` files.** McKinney's older attachments are legacy Word 97-2003 (`.doc`, binary CFB), not `.docx`. Our extractor only handles `.pdf` and `.docx`, so the file is skipped and enrichment is marked `none`.
-2. **Only a Resolution is posted.** Resolutions typically read *"…authorizing the City Manager to execute a contract with Terracon…"* without naming the dollar amount. The amount lives in the staff memo or contract exhibit, which for 26-0575 hasn't been uploaded yet (meeting is upcoming).
+## Fix
 
-We can fix #1. #2 is a data-availability limit we should make visible to the reader instead of silently leaving a blank.
+Replace URL-extension sniffing with response-driven detection inside `fetchAttachmentText`:
 
-## What we'll build
+1. After `fetch(url)`, read:
+   - `Content-Type` header (e.g. `application/pdf`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, `application/msword`)
+   - `Content-Disposition` filename (e.g. `filename="StaffReport.docx"`) as a secondary hint
+2. Read the body once into `Uint8Array`, then check magic bytes:
+   - `%PDF` (`0x25 50 44 46`) → PDF
+   - `PK\x03\x04` (`0x50 4B 03 04`) → ZIP container. Confirm it's DOCX by checking the central directory for `word/document.xml` (we already `unzipSync` — just gate the docx branch on that entry existing instead of trusting the extension). If it's a ZIP but not DOCX (e.g. an `.xlsx`/`.zip`), return null.
+   - `\xD0\xCF\x11\xE0` (CFB header) → legacy `.doc` (also covers `.xls`/`.ppt`; accept as `doc` since strings-extraction is format-agnostic and Gemini can still try)
+3. Resolution order: magic bytes win, content-type is the tiebreaker, filename/extension is last resort. This keeps us correct when servers send `application/octet-stream`.
+4. Keep the existing parsing branches (`pdf`, `docx`, `doc`) — only the detection step changes. Same `ExtractedAttachment` return shape.
 
-### 1. Parse `.doc` files (dual path)
+## Files
 
-In `src/lib/legistar.server.ts > fetchAttachmentText`, add a `.doc` branch that does both:
+- `src/lib/legistar.server.ts` — rewrite the detection block at the top of `fetchAttachmentText`; extract a small `detectKind(buf, headers, url)` helper for clarity.
 
-- **Path A — Gemini direct:** return the bytes as a Gemini file part with `mediaType: "application/msword"`. Gemini sometimes parses these natively.
-- **Path B — strings extraction:** walk the binary, keep printable ASCII/UTF-8 runs of ≥4 chars, join with newlines, collapse whitespace. Returns plain text the AI can read past the noise.
+## Out of scope
 
-Return both as a new result kind `{ kind: "doc", text: string, base64: string }`. In `enrichAgendaItem` we feed the AI both the extracted text *and* the file part — the model uses whichever is cleaner.
-
-### 2. Try harder when the staff report attachment is thin
-
-Right now we only feed Gemini the single "best" attachment chosen by `pickStaffReport`. For items where that attachment is just a Resolution and others exist (contract, exhibit), we should:
-
-- Score *all* attachments, take the top 2 (memo + first non-redline non-signed document), and concatenate their extracted text before the AI call.
-- Cap combined text at ~120k chars (already our limit).
-
-### 3. Honest UI when cost truly isn't in the source
-
-On `/item/$id`, when `enrichment_status === 'done'` but `cost_numeric` and `cost_estimate` are both null, show a small inline note under the Cost field: *"No dollar amount stated in the linked staff report or resolution."* When `enrichment_status === 'none'` (no readable doc at all), keep the existing "No staff report" badge but add: *"Only a [Resolution] is posted; the staff memo with the cost may not be uploaded yet."*
-
-### 4. Re-run on existing items
-
-After the code change, the "Re-read staff report" button on the item detail page will pick up the new `.doc` parser on next click. No bulk backfill — per the user's choice, refresh stays manual.
-
-## Files changed
-
-- `src/lib/legistar.server.ts` — add `.doc` branch + return new `doc` kind; expand `pickStaffReport` to return top-N.
-- `src/lib/agenda.functions.ts` — feed combined text + optional file part to `callEnrichAI`; record `enrichment_error` like "No dollar amount stated" when the AI returns no cost.
-- `src/routes/item.$id.tsx` — small "why no cost" hint under the Cost field.
-
-## What this won't fix
-
-If McKinney never uploads a staff memo with the dollar figure (some items genuinely don't have one until after contract execution), the cost will stay blank. That's a limit of the source data, not our pipeline — and we'll now say so on the page.
+No changes to `agenda.functions.ts`, UI, or DB. After this lands, the existing "Re-read staff report" button will pick up DOCX attachments that previously returned null.
