@@ -359,9 +359,7 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
         if (extracted?.kind === "text") docText = extracted.text;
         else if (extracted?.kind === "pdf") pdfBase64 = extracted.base64;
       }
-      if (!docText && !pdfBase64 && matterId) {
-        docText = await getMatterAgendaText(matterId);
-      }
+      // (No /texts fallback — Legistar's /matters/{id}/texts requires POST and is rarely populated for McKinney.)
 
       const hasContent = Boolean(docText || pdfBase64);
       if (!hasContent) {
