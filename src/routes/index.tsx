@@ -1,11 +1,12 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import {
   listAgendas,
   getAgenda,
   seedDefaultAgendaIfEmpty,
+  enrichAgenda,
 } from "@/lib/agenda.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,7 +39,7 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { Upload, FileText, Search } from "lucide-react";
+import { Upload, FileText, Search, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -152,9 +153,15 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function AgendaDashboard({ agendaId }: { agendaId: string }) {
   const fetchAgenda = useServerFn(getAgenda);
+  const enrich = useServerFn(enrichAgenda);
+  const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["agenda", agendaId],
     queryFn: () => fetchAgenda({ data: { id: agendaId } }),
+  });
+  const enrichMut = useMutation({
+    mutationFn: () => enrich({ data: { agendaId } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agenda", agendaId] }),
   });
 
   const [search, setSearch] = useState("");
@@ -205,10 +212,30 @@ function AgendaDashboard({ agendaId }: { agendaId: string }) {
     return Array.from(map, ([type, count]) => ({ type, count }));
   }, [items]);
 
+  const enrichedCount = items.filter((i) => i.enrichment_status === "done").length;
+  const pendingCount = items.filter((i) => i.enrichment_status === "pending").length;
+
   if (q.isLoading) return <div className="text-muted-foreground">Loading agenda…</div>;
 
   return (
     <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm text-muted-foreground">
+          Staff reports parsed: <span className="font-medium text-foreground">{enrichedCount}</span> of {items.length}
+          {enrichMut.isPending && " · reading staff reports…"}
+        </div>
+        <Button
+          size="sm"
+          onClick={() => enrichMut.mutate()}
+          disabled={enrichMut.isPending || pendingCount === 0}
+        >
+          <Sparkles className="mr-2 h-4 w-4" />
+          {pendingCount === 0
+            ? "All items enriched"
+            : `Fetch ${pendingCount} staff report${pendingCount === 1 ? "" : "s"}`}
+        </Button>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-4">
         <Stat label="Total items" value={items.length.toString()} />
         <Stat label="With disclosed cost" value={`${disclosed} of ${items.length}`} />

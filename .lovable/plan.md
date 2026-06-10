@@ -1,28 +1,65 @@
-## What you'll get
+# Enriching agenda items with staff-report data
 
-A dashboard where you upload a City Council agenda PDF and Lovable AI parses it into a structured, browsable list of items. Each item gets a plain-language explanation, owning department guess, estimated cost (when stated), and item type. Pre-loaded with the June 16, 2026 agenda so it's useful immediately.
+Right now each item only has what the AI can guess from its one-line title (department, cost, two-sentence summary). McKinney publishes a **staff report PDF** for almost every numbered item — that's where the real cost, funding source, vendor, background, and recommendation live. Pulling those in is the single biggest accuracy upgrade we can make.
 
-## Pages
+## What it takes
 
-1. **Home / Agenda list** — table of all items for the selected agenda, with filters (department, type), search, and a totals strip (item count, total disclosed cost, items by type).
-2. **Item detail** — full plain-language summary, original title, type, department, cost, and a link back to the source.
-3. **Charts** — cost-by-department bar chart and items-by-type donut.
-4. **Upload** — drop a new agenda PDF; AI parses and saves it as a new agenda you can switch between.
+### 1. Get a URL for each item's staff report
+McKinney runs its agendas on **Granicus Legistar** (`mckinney.legistar.com`). Each item on the printed agenda has a Legistar "File #" (e.g. `26-0563`) and a matching detail page at:
+`https://mckinney.legistar.com/LegislationDetail.aspx?ID=<n>&GUID=...`
+which links to the staff report PDF + attachments.
 
-## How it works
+Two options for getting that link:
+- **(a) Scrape the Legistar meeting page** for the agenda date → gives us the per-item detail URLs and attachment URLs cleanly. Most reliable.
+- **(b) Have the AI extract any URLs already present in the uploaded agenda PDF.** Works for the seeded agenda since the PDF embeds Legistar links, but breaks for hand-typed agendas.
 
-- **Backend (Lovable Cloud)** stores `agendas` and `agenda_items` (title, item_number, type, department, cost_estimate, plain_summary, source_excerpt).
-- **PDF parsing**: server function extracts text from the uploaded PDF, then Lovable AI (Gemini) returns a structured list of items with department, type, plain-language summary, and any cost figure mentioned. Cost stays null when not disclosed in the title (which is most of them — agendas rarely state dollar amounts on the cover page).
-- **Seeding**: the June 16, 2026 agenda is parsed once on first load so the dashboard isn't empty.
-- **Frontend**: TanStack Start routes, shadcn table/cards, Recharts for the two charts.
+Recommend (a) as primary, (b) as fallback.
 
-## Important honest caveat
+### 2. Store the new fields
+Add columns to `agenda_items`:
+- `staff_report_url` (text)
+- `attachments` (jsonb — array of `{name, url}`)
+- `enrichment_status` (text: `pending` | `done` | `failed` | `none`)
+- `enriched_at` (timestamptz)
 
-The agenda PDF lists item titles only — actual dollar amounts and confirmed owning departments live in the linked staff reports/ordinances, which aren't in this PDF. AI will infer department from the title (usually accurate: "Airport Fees" → Aviation, "Erwin Park" → Parks) and extract any explicit dollar figures, but most cost fields will show "Not disclosed in agenda." You can later add manual editing if you want to fill those in from staff reports.
+And expanded detail fields the AI will fill from the report:
+- `funding_source`, `vendor`, `recommendation`, `background` (text)
+- `detailed_summary` (longer plain-language explanation, ~1 paragraph)
+- override `cost_numeric` / `cost_estimate` when the report states a real number
 
-## Out of scope (can add later)
+### 3. Enrichment server function
+New `enrichAgendaItem({ itemId })` server fn that:
+1. Reads the row, fetches `staff_report_url` PDF as bytes.
+2. Sends the PDF to Gemini 3 Flash with a strict prompt asking for the fields above as JSON.
+3. Updates the row, sets `enrichment_status='done'`.
 
-- Manual editing of AI-generated fields
-- Fetching linked staff reports automatically
-- Multi-meeting comparison / trends across agendas
-- Auth (dashboard is public by default)
+Plus `enrichAgenda({ agendaId })` that loops items with `enrichment_status='pending'` (with small concurrency, e.g. 3 at a time).
+
+### 4. Trigger it
+- After a new agenda is parsed (`parseAgendaFromText` / `parseAgendaFromPdf` / `seedDefaultAgendaIfEmpty`), kick off enrichment in the background.
+- Add a manual **"Refresh staff report"** button on the item detail page for re-runs.
+- Show enrichment progress on the dashboard (e.g. "24/36 enriched").
+
+### 5. UI surface
+On `/item/$id`:
+- New sections: Funding source, Vendor, Staff recommendation, Background, Full summary.
+- "View original staff report" link + attachment list.
+- Badge showing enrichment status.
+
+On the dashboard:
+- Use the corrected `cost_numeric` from staff reports so the cost totals/charts stop saying "Not disclosed" for most items.
+
+## Trade-offs & caveats
+- **Legistar scraping is fragile** — if McKinney changes the site we'd need to adjust. No official API.
+- **Cost & time**: ~30–50 items per agenda × one PDF call each = noticeable AI spend per agenda, but only once per agenda.
+- **Robots/ToS**: Legistar pages are public; we should fetch politely (sequential or low concurrency, identifying user-agent).
+- **Fallback path**: if no `staff_report_url` is found for an item, leave `enrichment_status='none'` and keep the title-only summary.
+
+## Suggested first slice (smallest useful step)
+Just steps 2 + 3 + manual button in step 4, using option (b) for URL discovery on the already-seeded June 16 agenda. That proves the pipeline end-to-end on real data before we build the Legistar scraper.
+
+---
+
+**Questions before I build:**
+1. Go with **Legistar scraping (a)** up front, or ship the **smallest slice** first (manual button, AI-extracted URLs) and add scraping after?
+2. Auto-enrich every item on upload, or only on-demand per item (cheaper but slower for users)?
