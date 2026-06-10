@@ -118,6 +118,26 @@ export const listAgendas = createServerFn({ method: "GET" }).handler(async () =>
   return data ?? [];
 });
 
+export const deleteAgenda = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error: e1 } = await supabaseAdmin.from("agenda_items").delete().eq("agenda_id", data.id);
+    if (e1) throw new Error(e1.message);
+    const { error: e2 } = await supabaseAdmin.from("agendas").delete().eq("id", data.id);
+    if (e2) throw new Error(e2.message);
+    return { deleted: true };
+  });
+
+export const deleteAllAgendas = createServerFn({ method: "POST" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { error: e1 } = await supabaseAdmin.from("agenda_items").delete().not("id", "is", null);
+  if (e1) throw new Error(e1.message);
+  const { error: e2 } = await supabaseAdmin.from("agendas").delete().not("id", "is", null);
+  if (e2) throw new Error(e2.message);
+  return { deleted: true };
+});
+
 export const getAgenda = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
