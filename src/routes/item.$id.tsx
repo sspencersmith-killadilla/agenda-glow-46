@@ -58,6 +58,10 @@ function ItemDetail() {
     matter_url: string | null;
     locations: string[] | null;
     attachments: { name: string; url: string }[] | null;
+    is_grant: boolean | null;
+    grant_award_amount: number | string | null;
+    grant_match_amount: number | string | null;
+    grantor: string | null;
   };
 
   const enriched = it.enrichment_status === "done";
