@@ -9,20 +9,19 @@ import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
  * is configured. Throws if neither is available.
  */
 export function getGeminiModel() {
-  const geminiKey = process.env.GEMINI_API_KEY;
-  if (geminiKey) {
-    const google = createGoogleGenerativeAI({ apiKey: geminiKey });
-    // Direct Google API uses bare model names.
-    return google("gemini-2.5-flash");
-  }
-
   const lovableKey = process.env.LOVABLE_API_KEY;
   if (lovableKey) {
     const gateway = createLovableAiGatewayProvider(lovableKey);
     return gateway("google/gemini-3-flash-preview");
   }
 
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (geminiKey) {
+    const google = createGoogleGenerativeAI({ apiKey: geminiKey });
+    return google("gemini-2.5-flash");
+  }
+
   throw new Error(
-    "No AI key configured. Set GEMINI_API_KEY (recommended) or LOVABLE_API_KEY.",
+    "No AI key configured. Set LOVABLE_API_KEY (recommended) or GEMINI_API_KEY.",
   );
 }

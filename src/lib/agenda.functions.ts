@@ -4,9 +4,9 @@ import { generateText } from "ai";
 import { getGeminiModel } from "@/lib/google-ai.server";
 import { SEED_AGENDA_TITLE, SEED_AGENDA_DATE, SEED_AGENDA_TEXT } from "@/lib/agenda-seed";
 
-export const testGeminiConnection = createServerFn({ method: "POST" }).handler(
+export const testAIConnection = createServerFn({ method: "POST" }).handler(
   async () => {
-    const usingOwnKey = Boolean(process.env.GEMINI_API_KEY);
+    const usingLovable = Boolean(process.env.LOVABLE_API_KEY);
     const sample = `CITY COUNCIL REGULAR MEETING — SAMPLE
 CONSENT AGENDA
 24-0001  Consider approval of a $12,500 purchase of office supplies for the City Secretary's Office.`;
@@ -15,7 +15,7 @@ CONSENT AGENDA
       const items = await callAIParser(sample);
       return {
         ok: true,
-        usingOwnKey,
+        usingLovable,
         ms: Date.now() - started,
         itemsParsed: items.length,
         sampleItem: items[0]?.raw_title ?? null,
@@ -23,7 +23,7 @@ CONSENT AGENDA
     } catch (err) {
       return {
         ok: false,
-        usingOwnKey,
+        usingLovable,
         ms: Date.now() - started,
         error: err instanceof Error ? err.message : String(err),
       };
