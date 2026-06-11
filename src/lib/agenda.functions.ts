@@ -42,10 +42,14 @@ const ENRICH_INSTRUCTIONS = `You are reading a McKinney, TX City Council staff r
   "recommendation": "the staff recommendation in one sentence, or \"\"",
   "background": "2-3 sentence background of why this is before council",
   "detailed_summary": "one-paragraph plain-language explanation for a resident, no jargon, no acronyms",
-  "locations": ["array of specific street addresses or named places in McKinney, TX referenced by this item, e.g. '123 N Tennessee St, McKinney, TX' or 'McKinney National Airport'. Empty array if none. Do NOT include the generic city of McKinney or City Hall unless they are the actual subject."]
+  "locations": ["array of specific street addresses or named places in McKinney, TX referenced by this item, e.g. '123 N Tennessee St, McKinney, TX' or 'McKinney National Airport'. Empty array if none. Do NOT include the generic city of McKinney or City Hall unless they are the actual subject."],
+  "is_grant": true if this item is accepting, applying for, amending, or administering a grant or external funding award; false otherwise,
+  "grant_award_amount": dollar amount the City would RECEIVE from the grantor (incoming money) as a plain number, or 0,
+  "grant_match_amount": dollar amount the City must CONTRIBUTE as local match / city share (outgoing money) as a plain number, or 0,
+  "grantor": "name of the awarding agency or funder, e.g. TxDOT, FAA, HUD, FEMA, TDEM, Office of the Governor, or \"\" if not a grant"
 }
 
-If a field is unknown, use an empty string (or 0 for cost_numeric, [] for locations). Do not invent numbers or addresses.`;
+If a field is unknown, use an empty string (or 0 for numeric fields, [] for locations, false for is_grant). Do not invent numbers or addresses.`;
 
 function extractJsonObject(text: string): Record<string, unknown> {
   let c = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
