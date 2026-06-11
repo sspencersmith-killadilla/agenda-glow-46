@@ -531,6 +531,16 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
       // Dedupe
       const locations = Array.from(new Set(locationsRaw)).slice(0, 10);
 
+      const grant_award_amount = num(parsed.grant_award_amount) ?? item.grant_award_amount;
+      const grant_match_amount = num(parsed.grant_match_amount) ?? item.grant_match_amount;
+      const grantor = str(parsed.grantor) || item.grantor;
+      const is_grant =
+        Boolean(parsed.is_grant) ||
+        item.is_grant ||
+        grant_award_amount != null ||
+        Boolean(grantor) ||
+        /\bgrant\b/i.test(item.raw_title);
+
       const { error: uErr } = await supabaseAdmin
         .from("agenda_items")
         .update({
@@ -550,8 +560,12 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
           background: str(parsed.background) || null,
           detailed_summary: str(parsed.detailed_summary) || null,
           locations,
+          is_grant,
+          grant_award_amount,
+          grant_match_amount,
+          grantor: grantor || null,
           enrichment_status: "done",
-          enrichment_error: cost_numeric == null && !cost_estimate
+          enrichment_error: cost_numeric == null && !cost_estimate && grant_award_amount == null && grant_match_amount == null
             ? "No dollar amount stated in the linked staff report or resolution"
             : null,
           enriched_at: new Date().toISOString(),
