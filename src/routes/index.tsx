@@ -535,6 +535,11 @@ function AgendaDashboard({ agendaId }: { agendaId: string }) {
                             Consent
                           </Badge>
                         )}
+                        {it.is_grant && (
+                          <Badge className="ml-1 border-emerald-500/40 bg-emerald-500/15 text-[10px] text-emerald-800 dark:text-emerald-300">
+                            Grant
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm">{it.department}</TableCell>
                       <TableCell className="text-sm">
@@ -552,7 +557,23 @@ function AgendaDashboard({ agendaId }: { agendaId: string }) {
                         </span>
                       </TableCell>
                       <TableCell className="text-right text-sm">
-                        {it.cost_estimate ? (
+                        {it.is_grant ? (
+                          <div className="space-y-0.5">
+                            {it.grant_award_amount != null && (
+                              <div className="font-medium text-emerald-700 dark:text-emerald-400">
+                                +${Number(it.grant_award_amount).toLocaleString()} in
+                              </div>
+                            )}
+                            {it.grant_match_amount != null && Number(it.grant_match_amount) > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                −${Number(it.grant_match_amount).toLocaleString()} match
+                              </div>
+                            )}
+                            {it.grant_award_amount == null && it.grant_match_amount == null && (
+                              <span className="text-muted-foreground">Amount pending</span>
+                            )}
+                          </div>
+                        ) : it.cost_estimate ? (
                           <span
                             className={
                               flagged ? "font-semibold text-destructive" : "font-medium"
