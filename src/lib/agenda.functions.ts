@@ -68,22 +68,32 @@ const LenientItem = z.object({
   cost_numeric: z.coerce.number().nullish().catch(null),
   plain_summary: z.coerce.string().catch(""),
   on_consent: z.coerce.boolean().catch(false),
+  is_grant: z.coerce.boolean().catch(false),
+  grant_award_amount: z.coerce.number().nullish().catch(null),
+  grant_match_amount: z.coerce.number().nullish().catch(null),
+  grantor: z.coerce.string().nullish(),
 });
 
 const PARSE_INSTRUCTIONS = `Parse this McKinney, TX City Council meeting agenda. Extract EVERY numbered agenda item (skip section headers, invocations, public-comment blurbs, and procedural text).
 
 The agenda is divided into sections. Items appearing under a heading like "CONSENT AGENDA", "CONSENT MINUTES", "CONSENT ORDINANCES", or "CONSENT RESOLUTIONS" are on the consent agenda (passed in one vote with no debate). Items under "INDIVIDUAL CONSIDERATION", "PUBLIC HEARINGS", or similar are NOT on consent.
 
+Flag GRANT items: any item whose title mentions a grant, award, "accept funding", "interlocal funding agreement", or names a funding agency such as TxDOT, FAA, HUD, FEMA, TDEM, OOG (Office of the Governor), DOJ, EPA, COG, NCTCOG, or similar. For grants, separate money the City RECEIVES (grant_award_amount, incoming) from money the City must CONTRIBUTE as local match (grant_match_amount, outgoing).
+
 Respond with ONLY a JSON array (no markdown fences, no commentary). Each element:
 {
   "item_number": "26-0563" or "",
   "raw_title": "full original title",
-  "item_type": one of "Minutes" | "Ordinance" | "Resolution" | "Public Hearing" | "Election" | "Executive Session" | "Other",
+  "item_type": one of "Minutes" | "Ordinance" | "Resolution" | "Public Hearing" | "Election" | "Executive Session" | "Grant" | "Other",
   "department": best guess owning City department (Parks & Recreation, Aviation, Public Works, Police, Fire, Planning, Finance, City Secretary, City Manager, Economic Development, Legal, IT, etc.),
   "cost_estimate": dollar amount stated in the title like "$1,200,000", or "",
   "cost_numeric": same cost as a plain number, or 0,
   "plain_summary": "two-sentence plain-language explanation for a resident, no jargon",
-  "on_consent": true if this item appears under a CONSENT section, false otherwise
+  "on_consent": true if this item appears under a CONSENT section, false otherwise,
+  "is_grant": true if this item is accepting/applying for/amending a grant or external funding award,
+  "grant_award_amount": dollar amount the City would RECEIVE (incoming) as a plain number, or 0,
+  "grant_match_amount": dollar amount the City must CONTRIBUTE as local match (outgoing) as a plain number, or 0,
+  "grantor": awarding agency name (e.g. "TxDOT", "FAA", "HUD"), or ""
 }`;
 
 function extractJsonArray(text: string): unknown[] {
