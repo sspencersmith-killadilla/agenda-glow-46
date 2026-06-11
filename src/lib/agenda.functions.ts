@@ -126,6 +126,15 @@ function normalizeItems(rawItems: unknown[]) {
       const it = r.data;
       if (!it.raw_title.trim()) return null;
       const costNum = typeof it.cost_numeric === "number" && it.cost_numeric > 0 ? it.cost_numeric : null;
+      const awardNum =
+        typeof it.grant_award_amount === "number" && it.grant_award_amount > 0
+          ? it.grant_award_amount
+          : null;
+      const matchNum =
+        typeof it.grant_match_amount === "number" && it.grant_match_amount > 0
+          ? it.grant_match_amount
+          : null;
+      const isGrant = Boolean(it.is_grant) || awardNum != null || /\bgrant\b/i.test(it.raw_title);
       return {
         item_number: it.item_number?.trim() || null,
         raw_title: it.raw_title.trim(),
@@ -135,6 +144,10 @@ function normalizeItems(rawItems: unknown[]) {
         cost_numeric: costNum,
         plain_summary: it.plain_summary.trim(),
         on_consent: Boolean(it.on_consent),
+        is_grant: isGrant,
+        grant_award_amount: awardNum,
+        grant_match_amount: matchNum,
+        grantor: it.grantor?.trim() || null,
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
