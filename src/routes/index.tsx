@@ -272,6 +272,7 @@ function AgendaDashboard({ agendaId }: { agendaId: string }) {
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [grantsOnly, setGrantsOnly] = useState(false);
 
   const allItems = q.data?.items ?? [];
   // Exclude Minutes — they're not policy items and clutter the dashboard.
@@ -287,6 +288,7 @@ function AgendaDashboard({ agendaId }: { agendaId: string }) {
   );
 
   const filtered = items.filter((i) => {
+    if (grantsOnly && !i.is_grant) return false;
     if (deptFilter !== "all" && i.department !== deptFilter) return false;
     if (typeFilter !== "all" && i.item_type !== typeFilter) return false;
     if (search) {
@@ -296,8 +298,18 @@ function AgendaDashboard({ agendaId }: { agendaId: string }) {
     return true;
   });
 
-  const totalCost = items.reduce((sum, i) => sum + (Number(i.cost_numeric) || 0), 0);
-  const disclosed = items.filter((i) => i.cost_numeric != null).length;
+  const nonGrantItems = items.filter((i) => !i.is_grant);
+  const grantItems = items.filter((i) => i.is_grant);
+  const totalCost = nonGrantItems.reduce((sum, i) => sum + (Number(i.cost_numeric) || 0), 0);
+  const disclosed = nonGrantItems.filter((i) => i.cost_numeric != null).length;
+  const grantIncome = grantItems.reduce(
+    (sum, i) => sum + (Number(i.grant_award_amount) || 0),
+    0,
+  );
+  const grantMatch = grantItems.reduce(
+    (sum, i) => sum + (Number(i.grant_match_amount) || 0),
+    0,
+  );
 
   const byDept = useMemo(() => {
     const map = new Map<string, number>();
@@ -345,9 +357,9 @@ function AgendaDashboard({ agendaId }: { agendaId: string }) {
 
       <div className="grid gap-4 md:grid-cols-4">
         <Stat label="Total items" value={items.length.toString()} />
-        <Stat label="With disclosed cost" value={`${disclosed} of ${items.length}`} />
+        <Stat label="With disclosed cost" value={`${disclosed} of ${nonGrantItems.length}`} />
         <Stat
-          label="Disclosed cost total"
+          label="Disclosed cost total (non-grant)"
           value={
             totalCost > 0
               ? `$${totalCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
@@ -356,6 +368,43 @@ function AgendaDashboard({ agendaId }: { agendaId: string }) {
         />
         <Stat label="Departments involved" value={departments.length.toString()} />
       </div>
+
+      {grantItems.length > 0 && (
+        <Card className="border-emerald-500/30 bg-emerald-500/5">
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="text-base">
+                Grants — {grantItems.length} item{grantItems.length === 1 ? "" : "s"}
+              </CardTitle>
+              <Button
+                size="sm"
+                variant={grantsOnly ? "default" : "outline"}
+                onClick={() => setGrantsOnly((v) => !v)}
+              >
+                {grantsOnly ? "Showing grants only" : "Show grants only"}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-3">
+            <Stat
+              label="Potential income (awards in)"
+              value={grantIncome > 0 ? `$${grantIncome.toLocaleString()}` : "—"}
+            />
+            <Stat
+              label="Potential City cost (local match)"
+              value={grantMatch > 0 ? `$${grantMatch.toLocaleString()}` : "$0"}
+            />
+            <Stat
+              label="Net potential to McKinney"
+              value={
+                grantIncome - grantMatch !== 0
+                  ? `${grantIncome - grantMatch >= 0 ? "+" : "−"}$${Math.abs(grantIncome - grantMatch).toLocaleString()}`
+                  : "—"
+              }
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
