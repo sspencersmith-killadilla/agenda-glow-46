@@ -8,7 +8,7 @@ import {
   enrichAgenda,
   deleteAgenda,
   deleteAllAgendas,
-  testGeminiConnection,
+  testAIConnection,
 } from "@/lib/agenda.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -174,12 +174,12 @@ function Dashboard() {
 }
 
 function TestGeminiButton() {
-  const test = useServerFn(testGeminiConnection);
+  const test = useServerFn(testAIConnection);
   const [state, setState] = useState<
     | { status: "idle" }
     | { status: "running" }
-    | { status: "ok"; ms: number; itemsParsed: number; usingOwnKey: boolean }
-    | { status: "error"; error: string; usingOwnKey: boolean }
+    | { status: "ok"; ms: number; itemsParsed: number; usingLovable: boolean }
+    | { status: "error"; error: string; usingLovable: boolean }
   >({ status: "idle" });
 
   async function run() {
@@ -191,16 +191,16 @@ function TestGeminiButton() {
           status: "ok",
           ms: r.ms,
           itemsParsed: r.itemsParsed,
-          usingOwnKey: r.usingOwnKey,
+          usingLovable: r.usingLovable,
         });
       } else {
-        setState({ status: "error", error: r.error, usingOwnKey: r.usingOwnKey });
+        setState({ status: "error", error: r.error, usingLovable: r.usingLovable });
       }
     } catch (err) {
       setState({
         status: "error",
         error: err instanceof Error ? err.message : String(err),
-        usingOwnKey: false,
+        usingLovable: true,
       });
     }
   }
@@ -222,11 +222,11 @@ function TestGeminiButton() {
         ) : (
           <Sparkles className="mr-2 h-4 w-4" />
         )}
-        Test Gemini connection
+        Test AI connection
       </Button>
       {state.status === "ok" && (
         <span className="text-xs text-muted-foreground">
-          {state.usingOwnKey ? "Your key" : "Lovable fallback"} · parsed{" "}
+          {state.usingLovable ? "Lovable AI" : "Fallback (your Gemini key)"} · parsed{" "}
           {state.itemsParsed} item{state.itemsParsed === 1 ? "" : "s"} in{" "}
           {state.ms} ms
         </span>
