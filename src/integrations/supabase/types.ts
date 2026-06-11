@@ -28,7 +28,11 @@ export type Database = {
           enrichment_error: string | null
           enrichment_status: string
           funding_source: string | null
+          grant_award_amount: number | null
+          grant_match_amount: number | null
+          grantor: string | null
           id: string
+          is_grant: boolean
           item_number: string | null
           item_type: string | null
           locations: Json
@@ -58,7 +62,11 @@ export type Database = {
           enrichment_error?: string | null
           enrichment_status?: string
           funding_source?: string | null
+          grant_award_amount?: number | null
+          grant_match_amount?: number | null
+          grantor?: string | null
           id?: string
+          is_grant?: boolean
           item_number?: string | null
           item_type?: string | null
           locations?: Json
@@ -88,7 +96,11 @@ export type Database = {
           enrichment_error?: string | null
           enrichment_status?: string
           funding_source?: string | null
+          grant_award_amount?: number | null
+          grant_match_amount?: number | null
+          grantor?: string | null
           id?: string
+          is_grant?: boolean
           item_number?: string | null
           item_type?: string | null
           locations?: Json
