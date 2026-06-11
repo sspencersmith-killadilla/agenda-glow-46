@@ -234,6 +234,10 @@ type ParsedItem = {
   cost_numeric: number | null;
   plain_summary: string;
   on_consent: boolean;
+  is_grant: boolean;
+  grant_award_amount: number | null;
+  grant_match_amount: number | null;
+  grantor: string | null;
 };
 
 async function insertParsed(opts: {
@@ -264,6 +268,10 @@ async function insertParsed(opts: {
     cost_numeric: it.cost_numeric,
     plain_summary: it.plain_summary,
     on_consent: it.on_consent,
+    is_grant: it.is_grant,
+    grant_award_amount: it.grant_award_amount,
+    grant_match_amount: it.grant_match_amount,
+    grantor: it.grantor,
     sort_order: idx,
   }));
   if (rows.length > 0) {
