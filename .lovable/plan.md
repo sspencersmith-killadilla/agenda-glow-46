@@ -1,25 +1,58 @@
-## Plan: Move AI parsing back to Lovable AI Gateway
+# Add Grants as a separate category
 
-### Current state
-`src/lib/google-ai.server.ts` prefers `GEMINI_API_KEY` (direct Google API) and falls back to `LOVABLE_API_KEY` only when the user key is missing. Both secrets are configured.
+Right now every agenda item has a single `cost_numeric` field, which the AI fills with whatever dollar figure is most prominent. Grant items get lumped in with regular spending, and there's no way to tell a $500K *outgoing* purchase from a $500K *incoming* grant award — or from a grant that costs the City a $50K match to unlock $450K in state funds.
 
-### Changes
+This plan adds a first-class "Grant" concept so grants show up as their own category with both sides of the money clearly separated.
 
-1. **Reverse provider priority in `src/lib/google-ai.server.ts`**
-   - Check `LOVABLE_API_KEY` first and route through Lovable AI Gateway (`google/gemini-3-flash-preview`).
-   - Keep `GEMINI_API_KEY` as a fallback so the user retains an escape hatch.
-   - Rename the file or the helper to reflect that it is no longer Gemini-specific (optional — can keep filename for now).
+## What the user will see
 
-2. **Update UI copy on the dashboard**
-   - Rename "Test Gemini connection" button to "Test AI connection".
-   - Update status labels: instead of "Your key / Lovable fallback", show "Lovable AI" vs "Fallback (your key)".
+- A new **Grant** filter/section alongside the existing department & consent groupings on the agenda page.
+- On a grant item's detail page, two distinct figures:
+  - **Potential income** — the award amount coming *to* the City (e.g. "$450,000 from TxDOT").
+  - **Potential City cost** — the local match / city share the City must put up (e.g. "$50,000 match from General Fund"), or $0 if fully funded.
+- A small "Grant" badge on item cards in the list view.
+- Grantor (awarding agency) shown when known — e.g. "TxDOT", "FAA", "HUD", "TDEM".
 
-3. **Update server function name**
-   - Rename `testGeminiConnection` → `testAIConnection` in `src/lib/agenda.functions.ts` and update the import/call site in `src/routes/index.tsx`.
+## How it works under the hood (technical)
 
-### Technical details
-- Lovable AI Gateway already supports the same `generateText` + file-parts API through the OpenAI-compatible adapter, so PDF parsing and enrichment continue to work unchanged.
-- No new dependencies needed.
+### 1. Database
 
-### Outcome
-All agenda parsing and enrichment goes through Lovable AI Gateway by default. The user's own Gemini key remains available as a manual fallback if they ever need it.
+New columns on `agenda_items`:
+- `is_grant boolean not null default false`
+- `grant_award_amount numeric` — money coming in
+- `grant_match_amount numeric` — City's required match (outflow)
+- `grantor text` — awarding agency name
+
+`cost_numeric` stays as-is for non-grant items. For grant items the UI will prefer `grant_match_amount` when computing "what this costs McKinney."
+
+### 2. AI parsing prompt (`PARSE_INSTRUCTIONS` in `src/lib/agenda.functions.ts`)
+
+Add `"Grant"` to the `item_type` enum and ask the model to additionally return:
+```
+"is_grant": true if this item is accepting, applying for, or amending a grant,
+"grant_award_amount": dollar amount the City would receive, or 0,
+"grant_match_amount": dollar amount the City must contribute as match, or 0,
+"grantor": awarding agency name, or ""
+```
+
+Heuristic guidance in the prompt: titles containing "grant", "award", "accept funding", "interlocal funding agreement", or naming a funding agency (TxDOT, FAA, HUD, FEMA, TDEM, OOG, DOJ, etc.) should be flagged.
+
+### 3. Enrichment prompt (`ENRICH_INSTRUCTIONS`)
+
+Same four fields added so the staff-report pass can refine award/match/grantor from the memo body, where the split is usually spelled out.
+
+### 4. Normalization
+
+Extend `LenientItem` zod schema and `normalizeItems` to coerce and persist the new fields, mirroring the existing `cost_numeric` pattern.
+
+### 5. UI
+
+- `src/routes/index.tsx` — add a "Grants" group/tab; badge on cards where `is_grant`.
+- `src/routes/item.$id.tsx` — render the two-figure block with grantor when `is_grant`.
+
+## Out of scope
+
+- Backfilling existing parsed agendas — they'll keep their current categorization until re-parsed. (Happy to add a "re-parse" button in a follow-up if you want.)
+- Tracking grant lifecycle (applied → awarded → closed). This is one-shot per agenda item.
+
+Want me to proceed, or adjust the field set (e.g. add `grant_period` dates, separate `federal_vs_state`, etc.) first?

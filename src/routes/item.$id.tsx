@@ -58,6 +58,10 @@ function ItemDetail() {
     matter_url: string | null;
     locations: string[] | null;
     attachments: { name: string; url: string }[] | null;
+    is_grant: boolean | null;
+    grant_award_amount: number | string | null;
+    grant_match_amount: number | string | null;
+    grantor: string | null;
   };
 
   const enriched = it.enrichment_status === "done";
@@ -94,6 +98,11 @@ function ItemDetail() {
           <Badge variant="secondary">{it.department}</Badge>
           {it.cost_estimate && <Badge variant="outline">{it.cost_estimate}</Badge>}
           {it.matter_status && <Badge variant="outline">{it.matter_status}</Badge>}
+          {it.is_grant && (
+            <Badge className="border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300">
+              Grant{it.grantor ? ` · ${it.grantor}` : ""}
+            </Badge>
+          )}
           <EnrichmentBadge status={it.enrichment_status} />
         </div>
 
@@ -101,6 +110,40 @@ function ItemDetail() {
           <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
             Enrichment failed: {it.enrichment_error}
           </div>
+        )}
+
+        {it.is_grant && (
+          <Card className="border-emerald-500/30 bg-emerald-500/5">
+            <CardHeader>
+              <CardTitle className="text-base">
+                Grant impact{it.grantor ? ` — ${it.grantor}` : ""}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Potential income (award to City)
+                </div>
+                <div className="mt-1 text-xl font-semibold text-emerald-700 dark:text-emerald-400">
+                  {it.grant_award_amount != null
+                    ? `+$${Number(it.grant_award_amount).toLocaleString()}`
+                    : "Not yet disclosed"}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Potential City cost (local match)
+                </div>
+                <div className="mt-1 text-xl font-semibold">
+                  {it.grant_match_amount != null && Number(it.grant_match_amount) > 0
+                    ? `−$${Number(it.grant_match_amount).toLocaleString()}`
+                    : it.grant_match_amount != null
+                      ? "$0 (no match required)"
+                      : "Not yet disclosed"}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         <Card>

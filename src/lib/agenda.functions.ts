@@ -42,10 +42,14 @@ const ENRICH_INSTRUCTIONS = `You are reading a McKinney, TX City Council staff r
   "recommendation": "the staff recommendation in one sentence, or \"\"",
   "background": "2-3 sentence background of why this is before council",
   "detailed_summary": "one-paragraph plain-language explanation for a resident, no jargon, no acronyms",
-  "locations": ["array of specific street addresses or named places in McKinney, TX referenced by this item, e.g. '123 N Tennessee St, McKinney, TX' or 'McKinney National Airport'. Empty array if none. Do NOT include the generic city of McKinney or City Hall unless they are the actual subject."]
+  "locations": ["array of specific street addresses or named places in McKinney, TX referenced by this item, e.g. '123 N Tennessee St, McKinney, TX' or 'McKinney National Airport'. Empty array if none. Do NOT include the generic city of McKinney or City Hall unless they are the actual subject."],
+  "is_grant": true if this item is accepting, applying for, amending, or administering a grant or external funding award; false otherwise,
+  "grant_award_amount": dollar amount the City would RECEIVE from the grantor (incoming money) as a plain number, or 0,
+  "grant_match_amount": dollar amount the City must CONTRIBUTE as local match / city share (outgoing money) as a plain number, or 0,
+  "grantor": "name of the awarding agency or funder, e.g. TxDOT, FAA, HUD, FEMA, TDEM, Office of the Governor, or \"\" if not a grant"
 }
 
-If a field is unknown, use an empty string (or 0 for cost_numeric, [] for locations). Do not invent numbers or addresses.`;
+If a field is unknown, use an empty string (or 0 for numeric fields, [] for locations, false for is_grant). Do not invent numbers or addresses.`;
 
 function extractJsonObject(text: string): Record<string, unknown> {
   let c = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
@@ -64,22 +68,32 @@ const LenientItem = z.object({
   cost_numeric: z.coerce.number().nullish().catch(null),
   plain_summary: z.coerce.string().catch(""),
   on_consent: z.coerce.boolean().catch(false),
+  is_grant: z.coerce.boolean().catch(false),
+  grant_award_amount: z.coerce.number().nullish().catch(null),
+  grant_match_amount: z.coerce.number().nullish().catch(null),
+  grantor: z.coerce.string().nullish(),
 });
 
 const PARSE_INSTRUCTIONS = `Parse this McKinney, TX City Council meeting agenda. Extract EVERY numbered agenda item (skip section headers, invocations, public-comment blurbs, and procedural text).
 
 The agenda is divided into sections. Items appearing under a heading like "CONSENT AGENDA", "CONSENT MINUTES", "CONSENT ORDINANCES", or "CONSENT RESOLUTIONS" are on the consent agenda (passed in one vote with no debate). Items under "INDIVIDUAL CONSIDERATION", "PUBLIC HEARINGS", or similar are NOT on consent.
 
+Flag GRANT items: any item whose title mentions a grant, award, "accept funding", "interlocal funding agreement", or names a funding agency such as TxDOT, FAA, HUD, FEMA, TDEM, OOG (Office of the Governor), DOJ, EPA, COG, NCTCOG, or similar. For grants, separate money the City RECEIVES (grant_award_amount, incoming) from money the City must CONTRIBUTE as local match (grant_match_amount, outgoing).
+
 Respond with ONLY a JSON array (no markdown fences, no commentary). Each element:
 {
   "item_number": "26-0563" or "",
   "raw_title": "full original title",
-  "item_type": one of "Minutes" | "Ordinance" | "Resolution" | "Public Hearing" | "Election" | "Executive Session" | "Other",
+  "item_type": one of "Minutes" | "Ordinance" | "Resolution" | "Public Hearing" | "Election" | "Executive Session" | "Grant" | "Other",
   "department": best guess owning City department (Parks & Recreation, Aviation, Public Works, Police, Fire, Planning, Finance, City Secretary, City Manager, Economic Development, Legal, IT, etc.),
   "cost_estimate": dollar amount stated in the title like "$1,200,000", or "",
   "cost_numeric": same cost as a plain number, or 0,
   "plain_summary": "two-sentence plain-language explanation for a resident, no jargon",
-  "on_consent": true if this item appears under a CONSENT section, false otherwise
+  "on_consent": true if this item appears under a CONSENT section, false otherwise,
+  "is_grant": true if this item is accepting/applying for/amending a grant or external funding award,
+  "grant_award_amount": dollar amount the City would RECEIVE (incoming) as a plain number, or 0,
+  "grant_match_amount": dollar amount the City must CONTRIBUTE as local match (outgoing) as a plain number, or 0,
+  "grantor": awarding agency name (e.g. "TxDOT", "FAA", "HUD"), or ""
 }`;
 
 function extractJsonArray(text: string): unknown[] {
@@ -112,6 +126,15 @@ function normalizeItems(rawItems: unknown[]) {
       const it = r.data;
       if (!it.raw_title.trim()) return null;
       const costNum = typeof it.cost_numeric === "number" && it.cost_numeric > 0 ? it.cost_numeric : null;
+      const awardNum =
+        typeof it.grant_award_amount === "number" && it.grant_award_amount > 0
+          ? it.grant_award_amount
+          : null;
+      const matchNum =
+        typeof it.grant_match_amount === "number" && it.grant_match_amount > 0
+          ? it.grant_match_amount
+          : null;
+      const isGrant = Boolean(it.is_grant) || awardNum != null || /\bgrant\b/i.test(it.raw_title);
       return {
         item_number: it.item_number?.trim() || null,
         raw_title: it.raw_title.trim(),
@@ -121,6 +144,10 @@ function normalizeItems(rawItems: unknown[]) {
         cost_numeric: costNum,
         plain_summary: it.plain_summary.trim(),
         on_consent: Boolean(it.on_consent),
+        is_grant: isGrant,
+        grant_award_amount: awardNum,
+        grant_match_amount: matchNum,
+        grantor: it.grantor?.trim() || null,
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
@@ -207,6 +234,10 @@ type ParsedItem = {
   cost_numeric: number | null;
   plain_summary: string;
   on_consent: boolean;
+  is_grant: boolean;
+  grant_award_amount: number | null;
+  grant_match_amount: number | null;
+  grantor: string | null;
 };
 
 async function insertParsed(opts: {
@@ -237,6 +268,10 @@ async function insertParsed(opts: {
     cost_numeric: it.cost_numeric,
     plain_summary: it.plain_summary,
     on_consent: it.on_consent,
+    is_grant: it.is_grant,
+    grant_award_amount: it.grant_award_amount,
+    grant_match_amount: it.grant_match_amount,
+    grantor: it.grantor,
     sort_order: idx,
   }));
   if (rows.length > 0) {
@@ -496,6 +531,16 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
       // Dedupe
       const locations = Array.from(new Set(locationsRaw)).slice(0, 10);
 
+      const grant_award_amount = num(parsed.grant_award_amount) ?? item.grant_award_amount;
+      const grant_match_amount = num(parsed.grant_match_amount) ?? item.grant_match_amount;
+      const grantor = str(parsed.grantor) || item.grantor;
+      const is_grant =
+        Boolean(parsed.is_grant) ||
+        item.is_grant ||
+        grant_award_amount != null ||
+        Boolean(grantor) ||
+        /\bgrant\b/i.test(item.raw_title);
+
       const { error: uErr } = await supabaseAdmin
         .from("agenda_items")
         .update({
@@ -515,8 +560,12 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
           background: str(parsed.background) || null,
           detailed_summary: str(parsed.detailed_summary) || null,
           locations,
+          is_grant,
+          grant_award_amount,
+          grant_match_amount,
+          grantor: grantor || null,
           enrichment_status: "done",
-          enrichment_error: cost_numeric == null && !cost_estimate
+          enrichment_error: cost_numeric == null && !cost_estimate && grant_award_amount == null && grant_match_amount == null
             ? "No dollar amount stated in the linked staff report or resolution"
             : null,
           enriched_at: new Date().toISOString(),
