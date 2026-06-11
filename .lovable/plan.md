@@ -1,32 +1,25 @@
-# Use your own Gemini API key for PDF parsing
+## Plan: Move AI parsing back to Lovable AI Gateway
 
-Right now every AI call (PDF parsing, staff-report extraction, item enrichment) goes through Lovable AI Gateway and draws from your Lovable workspace credits. When credits run out you see the "payment required" error.
+### Current state
+`src/lib/google-ai.server.ts` prefers `GEMINI_API_KEY` (direct Google API) and falls back to `LOVABLE_API_KEY` only when the user key is missing. Both secrets are configured.
 
-This plan switches those calls to use **your own Google AI Studio Gemini API key** so they bill directly to your Google account and never touch Lovable credits.
+### Changes
 
-## Steps
+1. **Reverse provider priority in `src/lib/google-ai.server.ts`**
+   - Check `LOVABLE_API_KEY` first and route through Lovable AI Gateway (`google/gemini-3-flash-preview`).
+   - Keep `GEMINI_API_KEY` as a fallback so the user retains an escape hatch.
+   - Rename the file or the helper to reflect that it is no longer Gemini-specific (optional — can keep filename for now).
 
-1. **Add the secret.** I'll prompt you to paste `GEMINI_API_KEY` into Lovable's secure secret form (the same key you use on your other project — grab it from https://aistudio.google.com/apikey if you don't have it handy).
+2. **Update UI copy on the dashboard**
+   - Rename "Test Gemini connection" button to "Test AI connection".
+   - Update status labels: instead of "Your key / Lovable fallback", show "Lovable AI" vs "Fallback (your key)".
 
-2. **Install the Google provider package.** Add `@ai-sdk/google` so the AI SDK can talk to Google's API directly (same surface as the Lovable provider; `generateText`/`Output.object` keep working unchanged).
+3. **Update server function name**
+   - Rename `testGeminiConnection` → `testAIConnection` in `src/lib/agenda.functions.ts` and update the import/call site in `src/routes/index.tsx`.
 
-3. **Add a Google provider helper.** Create `src/lib/google-ai.server.ts` exporting `createGoogleProvider()` that reads `process.env.GEMINI_API_KEY` and returns the Google provider.
+### Technical details
+- Lovable AI Gateway already supports the same `generateText` + file-parts API through the OpenAI-compatible adapter, so PDF parsing and enrichment continue to work unchanged.
+- No new dependencies needed.
 
-4. **Switch the three AI calls in `src/lib/agenda.functions.ts`** from `gateway("google/gemini-3-flash-preview")` to `google("gemini-2.5-flash")` (Google's direct API uses bare model names — `gemini-3-flash-preview` is a Lovable-only alias). Affects:
-   - `callAIParser` (PDF parsing)
-   - `extractStaffReportFields` (staff report enrichment)
-   - the agenda-item enrichment loop
-
-5. **Keep a graceful fallback.** If `GEMINI_API_KEY` is missing, fall back to the Lovable gateway so nothing breaks for future contributors. If both are missing, surface a clear error.
-
-## What stays the same
-
-- All Zod schemas, prompts, parsing logic, and the dashboard UI.
-- Lovable Cloud (database, auth) is unchanged.
-- The image-generation / other Lovable features (if any added later) still use `LOVABLE_API_KEY`.
-
-## Cost note
-
-Google's Gemini API has a generous free tier (`gemini-2.5-flash` is free up to daily limits) and pay-as-you-go beyond that — billed to your Google account, not Lovable.
-
-Ready to switch to build mode and add the key?
+### Outcome
+All agenda parsing and enrichment goes through Lovable AI Gateway by default. The user's own Gemini key remains available as a manual fallback if they ever need it.
