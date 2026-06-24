@@ -115,7 +115,7 @@ function UploadPage() {
               {error && <div className="text-sm text-destructive">{error}</div>}
               <Button type="submit" disabled={busy}>
                 <Upload className="mr-2 h-4 w-4" />
-                {busy ? "Parsing with AI…" : "Parse & add to dashboard"}
+                {busy ? status || "Working…" : "Parse & add to dashboard"}
               </Button>
               <p className="text-xs text-muted-foreground">
                 The PDF is sent to Lovable AI which extracts each numbered item, infers the
