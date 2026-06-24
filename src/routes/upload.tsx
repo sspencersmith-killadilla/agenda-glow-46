@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { parseAgendaFromPdf } from "@/lib/agenda.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ function UploadPage() {
   const [meetingDate, setMeetingDate] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -36,22 +38,22 @@ function UploadPage() {
     }
     setBusy(true);
     try {
-      const buf = await file.arrayBuffer();
-      // base64 encode in chunks (safe for large files)
-      let binary = "";
-      const bytes = new Uint8Array(buf);
-      const chunk = 0x8000;
-      for (let i = 0; i < bytes.length; i += chunk) {
-        binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
-      }
-      const pdfBase64 = btoa(binary);
+      // Upload PDF directly to storage (streamed) to avoid base64-encoding
+      // a 20MB file through the server-function RPC payload.
+      setStatus("Uploading PDF…");
+      const pdfPath = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const { error: upErr } = await supabase.storage
+        .from("agenda-pdfs")
+        .upload(pdfPath, file, { contentType: "application/pdf", upsert: false });
+      if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
 
+      setStatus("Parsing with AI…");
       const result = await parse({
         data: {
           title: title || file.name.replace(/\.pdf$/i, ""),
           meetingDate: meetingDate || null,
           sourceFilename: file.name,
-          pdfBase64,
+          pdfPath,
         },
       });
       router.navigate({ to: "/" });
@@ -60,6 +62,7 @@ function UploadPage() {
       setError(err instanceof Error ? err.message : "Failed to parse");
     } finally {
       setBusy(false);
+      setStatus("");
     }
   }
 
@@ -112,7 +115,7 @@ function UploadPage() {
               {error && <div className="text-sm text-destructive">{error}</div>}
               <Button type="submit" disabled={busy}>
                 <Upload className="mr-2 h-4 w-4" />
-                {busy ? "Parsing with AI…" : "Parse & add to dashboard"}
+                {busy ? status || "Working…" : "Parse & add to dashboard"}
               </Button>
               <p className="text-xs text-muted-foreground">
                 The PDF is sent to Lovable AI which extracts each numbered item, infers the

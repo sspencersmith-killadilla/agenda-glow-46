@@ -328,31 +328,39 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
         title: z.string().min(1).max(300),
         meetingDate: z.string().nullable().optional(),
         sourceFilename: z.string().nullable().optional(),
-        // base64-encoded PDF
-        pdfBase64: z.string().min(100),
+        // Storage object path inside the "agenda-pdfs" bucket. The browser
+        // uploads the PDF directly to storage so we never pay the cost of
+        // base64-encoding ~20MB through the RPC payload (which OOM'd the Worker).
+        pdfPath: z.string().min(1),
       })
       .parse(input),
   )
   .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: blob, error: dlError } = await supabaseAdmin.storage
+      .from("agenda-pdfs")
+      .download(data.pdfPath);
+    if (dlError || !blob) {
+      throw new Error(`Failed to load PDF from storage: ${dlError?.message ?? "missing file"}`);
+    }
+    const pdfBytes = new Uint8Array(await blob.arrayBuffer());
+
     const { text } = await generateText({
       model: getGeminiModel(),
       messages: [
         {
           role: "user",
           content: [
-            {
-              type: "text",
-              text: PARSE_INSTRUCTIONS,
-            },
-            {
-              type: "file",
-              mediaType: "application/pdf",
-              data: data.pdfBase64,
-            },
+            { type: "text", text: PARSE_INSTRUCTIONS },
+            { type: "file", mediaType: "application/pdf", data: pdfBytes },
           ],
         },
       ],
     });
+
+    // Best-effort cleanup; ignore failures.
+    void supabaseAdmin.storage.from("agenda-pdfs").remove([data.pdfPath]);
+
     const normalized = normalizeItems(extractJsonArray(text));
     if (normalized.length === 0) throw new Error("No agenda items could be parsed from the PDF");
     const agenda = await insertParsed({
