@@ -1,8 +1,10 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  listOrganizations,
+  createOrganization,
   listAgendas,
   getAgenda,
   enrichAgenda,
@@ -41,17 +43,38 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { Upload, FileText, Search, Sparkles, Trash2, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import {
+  Upload,
+  FileText,
+  Search,
+  Sparkles,
+  Trash2,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Building2,
+  Plus,
+} from "lucide-react";
+
+const SELECTED_ORG_STORAGE_KEY = "civicplexus_selected_org_id";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "McKinney Council Agenda Dashboard" },
+      { title: "CivicPlexus Agenda — Public Meeting Dashboard" },
       {
         name: "description",
         content:
-          "Plain-language dashboard for McKinney, TX City Council agenda items — costs, departments, and summaries.",
+          "Plain-language agenda dashboard for any city or organization — costs, departments, grants, and summaries. Part of the CivicPlexus family of sites.",
       },
+      { property: "og:title", content: "CivicPlexus Agenda — Public Meeting Dashboard" },
+      {
+        property: "og:description",
+        content:
+          "Plain-language agenda dashboard for any city or organization — costs, departments, grants, and summaries.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Dashboard,
@@ -76,41 +99,108 @@ const TYPE_COLORS: Record<string, string> = {
 function Dashboard() {
   const router = useRouter();
   const qc = useQueryClient();
+  const fetchOrgs = useServerFn(listOrganizations);
+  const addOrg = useServerFn(createOrganization);
   const fetchAgendas = useServerFn(listAgendas);
   const delOne = useServerFn(deleteAgenda);
   const delAll = useServerFn(deleteAllAgendas);
 
+  const orgsQ = useQuery({
+    queryKey: ["organizations"],
+    queryFn: () => fetchOrgs(),
+  });
   const agendasQ = useQuery({
     queryKey: ["agendas"],
     queryFn: () => fetchAgendas(),
   });
 
-  const agendas = agendasQ.data ?? [];
+  const orgs = orgsQ.data ?? [];
+  const allAgendas = agendasQ.data ?? [];
+  const [selectedOrgId, setSelectedOrgId] = useState<string>("all");
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
-  const activeId = selectedId ?? agendas[0]?.id;
 
-  if (agendasQ.isLoading) {
-    return <Shell><div className="text-muted-foreground">Loading…</div></Shell>;
+  useEffect(() => {
+    const stored = window.localStorage.getItem(SELECTED_ORG_STORAGE_KEY);
+    if (stored) setSelectedOrgId(stored);
+  }, []);
+
+  const activeOrg = useMemo(
+    () => (selectedOrgId !== "all" ? orgs.find((o) => o.id === selectedOrgId) ?? null : null),
+    [orgs, selectedOrgId],
+  );
+
+  const effectiveOrgId = activeOrg ? activeOrg.id : "all";
+
+  const agendas = useMemo(() => {
+    if (effectiveOrgId === "all") return allAgendas;
+    return allAgendas.filter((a) => a.organization_id === effectiveOrgId);
+  }, [allAgendas, effectiveOrgId]);
+
+  const activeId = selectedId ?? agendas[0]?.id;
+  const activeAgenda = agendas.find((a) => a.id === activeId);
+  const activeAgendaOrgName =
+    (activeAgenda as { organizations?: { name?: string | null } | null } | undefined)
+      ?.organizations?.name ?? activeOrg?.name ?? null;
+
+  function handleSelectOrg(val: string) {
+    setSelectedOrgId(val);
+    setSelectedId(undefined);
+    if (val === "all") {
+      window.localStorage.removeItem(SELECTED_ORG_STORAGE_KEY);
+    } else {
+      window.localStorage.setItem(SELECTED_ORG_STORAGE_KEY, val);
+    }
+  }
+
+  async function handleCreateOrg(name: string) {
+    const created = await addOrg({ data: { name } });
+    await qc.invalidateQueries({ queryKey: ["organizations"] });
+    handleSelectOrg(created.id);
+    return created;
+  }
+
+  const shellProps = {
+    orgs,
+    selectedOrgId: effectiveOrgId,
+    activeOrgName: activeOrg?.name ?? null,
+    onSelectOrg: handleSelectOrg,
+    onCreateOrg: handleCreateOrg,
+  };
+
+  if (agendasQ.isLoading || orgsQ.isLoading) {
+    return (
+      <Shell {...shellProps}>
+        <div className="text-muted-foreground">Loading…</div>
+      </Shell>
+    );
   }
   if (agendas.length === 0) {
     return (
-      <Shell>
+      <Shell {...shellProps}>
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">No agendas yet</CardTitle>
+            <CardTitle className="text-base">
+              {activeOrg ? `No agendas yet for ${activeOrg.name}` : "No agendas yet"}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Upload a McKinney City Council agenda PDF to get started. Lovable AI will
-              parse each item, identify departments, extract any disclosed costs, and write
+              Upload a council or public meeting agenda PDF to get started. AI will parse
+              each item, identify departments, extract any disclosed costs, and write
               plain-language summaries.
             </p>
+            {orgs.length === 0 && <InlineCreateOrg onCreate={handleCreateOrg} />}
             <div className="flex flex-wrap gap-2">
               <Link to="/upload">
                 <Button>
                   <Upload className="mr-2 h-4 w-4" /> Upload an agenda
                 </Button>
               </Link>
+              {activeOrg && allAgendas.length > 0 && (
+                <Button variant="outline" onClick={() => handleSelectOrg("all")}>
+                  Show all cities & organizations ({allAgendas.length})
+                </Button>
+              )}
               <TestGeminiButton />
             </div>
           </CardContent>
@@ -120,7 +210,7 @@ function Dashboard() {
   }
 
   return (
-    <Shell>
+    <Shell {...shellProps}>
       <div className="flex flex-wrap items-center gap-3">
         <Select value={activeId} onValueChange={setSelectedId}>
           <SelectTrigger className="w-[420px] max-w-full">
@@ -159,7 +249,7 @@ function Dashboard() {
           size="sm"
           className="text-destructive hover:text-destructive"
           onClick={async () => {
-            if (!confirm(`Delete ALL ${agendas.length} agendas? This cannot be undone.`)) return;
+            if (!confirm(`Delete ALL ${allAgendas.length} agendas? This cannot be undone.`)) return;
             await delAll({});
             setSelectedId(undefined);
             qc.invalidateQueries({ queryKey: ["agendas"] });
@@ -170,7 +260,7 @@ function Dashboard() {
         </Button>
         <TestGeminiButton />
       </div>
-      {activeId && <AgendaDashboard agendaId={activeId} />}
+      {activeId && <AgendaDashboard agendaId={activeId} orgName={activeAgendaOrgName} />}
     </Shell>
   );
 }
@@ -240,16 +330,131 @@ function TestGeminiButton() {
   );
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function InlineCreateOrg({
+  onCreate,
+  onCancel,
+}: {
+  onCreate: (name: string) => Promise<unknown>;
+  onCancel?: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError("Enter a city or organization name.");
+      return;
+    }
+    if (trimmed.length > 120) {
+      setError("Name must be 120 characters or fewer.");
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      await onCreate(trimmed);
+      setName("");
+      onCancel?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save organization.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-background">
+    <form onSubmit={submit} className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          aria-label="City or organization name"
+          placeholder="Create a city or organization (e.g. City of Austin, TX)"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="h-9 w-72 max-w-full"
+          disabled={busy}
+        />
+        <Button type="submit" size="sm" disabled={busy}>
+          {busy ? "Saving…" : "Save"}
+        </Button>
+        {onCancel && (
+          <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={busy}>
+            Cancel
+          </Button>
+        )}
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </form>
+  );
+}
+
+function Shell({
+  children,
+  orgs,
+  selectedOrgId,
+  activeOrgName,
+  onSelectOrg,
+  onCreateOrg,
+}: {
+  children: React.ReactNode;
+  orgs: Array<{ id: string; name: string }>;
+  selectedOrgId: string;
+  activeOrgName: string | null;
+  onSelectOrg: (id: string) => void;
+  onCreateOrg: (name: string) => Promise<unknown>;
+}) {
+  const [addingOrg, setAddingOrg] = useState(false);
+
+  return (
+    <div>
       <header className="border-b">
-        <div className="container mx-auto flex items-center justify-between px-6 py-4">
-          <div>
-            <h1 className="text-xl font-semibold">McKinney Council Agenda Dashboard</h1>
-            <p className="text-sm text-muted-foreground">
-              Plain-language summaries · departments · disclosed costs
-            </p>
+        <div className="container mx-auto flex flex-wrap items-center justify-between gap-4 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <img
+              src="/civicplexus-mark.png"
+              alt="CivicPlexus"
+              className="h-9 w-9 shrink-0 rounded-md"
+            />
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Part of the CivicPlexus family of sites
+              </div>
+              <h1 className="text-xl font-semibold">
+                {activeOrgName ? `${activeOrgName} — Agenda Dashboard` : "CivicPlexus Agenda"}
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Plain-language summaries · departments · disclosed costs
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {addingOrg ? (
+              <InlineCreateOrg onCreate={onCreateOrg} onCancel={() => setAddingOrg(false)} />
+            ) : (
+              <>
+                {orgs.length > 0 && (
+                  <Select value={selectedOrgId} onValueChange={onSelectOrg}>
+                    <SelectTrigger className="w-64 max-w-full" aria-label="Select city or organization">
+                      <Building2 className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                      <SelectValue placeholder="All cities & orgs" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All cities & organizations</SelectItem>
+                      {orgs.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Button variant="outline" size="sm" onClick={() => setAddingOrg(true)}>
+                  <Plus className="mr-1.5 h-4 w-4" /> New city / org
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -258,7 +463,13 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function AgendaDashboard({ agendaId }: { agendaId: string }) {
+function AgendaDashboard({
+  agendaId,
+  orgName,
+}: {
+  agendaId: string;
+  orgName: string | null;
+}) {
   const fetchAgenda = useServerFn(getAgenda);
   const enrich = useServerFn(enrichAgenda);
   const qc = useQueryClient();
@@ -393,11 +604,11 @@ function AgendaDashboard({ agendaId }: { agendaId: string }) {
               value={grantIncome > 0 ? `$${grantIncome.toLocaleString()}` : "—"}
             />
             <Stat
-              label="Potential City cost (local match)"
+              label="Potential local cost (match)"
               value={grantMatch > 0 ? `$${grantMatch.toLocaleString()}` : "$0"}
             />
             <Stat
-              label="Net potential to McKinney"
+              label={orgName ? `Net potential to ${orgName}` : "Net potential to organization"}
               value={
                 grantIncome - grantMatch !== 0
                   ? `${grantIncome - grantMatch >= 0 ? "+" : "−"}$${Math.abs(grantIncome - grantMatch).toLocaleString()}`

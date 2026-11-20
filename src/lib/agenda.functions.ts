@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { generateText } from "ai";
 import { getGeminiModel } from "@/lib/google-ai.server";
-import { SEED_AGENDA_TITLE, SEED_AGENDA_DATE, SEED_AGENDA_TEXT } from "@/lib/agenda-seed";
 
 export const testAIConnection = createServerFn({ method: "POST" }).handler(
   async () => {
@@ -31,25 +30,33 @@ CONSENT AGENDA
   },
 );
 
-const ENRICH_INSTRUCTIONS = `You are reading a McKinney, TX City Council staff report / ordinance / resolution document attached to an agenda item. Extract the key facts as JSON. Respond with ONLY a JSON object (no markdown fences, no commentary):
+function buildEnrichInstructions(organizationName?: string | null): string {
+  const orgLabel = organizationName?.trim()
+    ? `${organizationName.trim()} governing body`
+    : "city council or public organization";
+  const locationHint = organizationName?.trim()
+    ? ` in ${organizationName.trim()}`
+    : "";
+  return `You are reading a ${orgLabel} staff report / ordinance / resolution document attached to an agenda item. Extract the key facts as JSON. Respond with ONLY a JSON object (no markdown fences, no commentary):
 
 {
-  "department": "owning City department, e.g. Parks & Recreation, Aviation, Public Works",
+  "department": "owning department or office, e.g. Parks & Recreation, Aviation, Public Works",
   "cost_estimate": "primary dollar amount as written, like $1,234,567, or \"\" if none",
   "cost_numeric": same cost as plain number, or 0,
   "funding_source": "which fund/budget pays for this, or \"\"",
   "vendor": "contractor / company / counterparty named, or \"\"",
   "recommendation": "the staff recommendation in one sentence, or \"\"",
-  "background": "2-3 sentence background of why this is before council",
-  "detailed_summary": "one-paragraph plain-language explanation for a resident, no jargon, no acronyms",
-  "locations": ["array of specific street addresses or named places in McKinney, TX referenced by this item, e.g. '123 N Tennessee St, McKinney, TX' or 'McKinney National Airport'. Empty array if none. Do NOT include the generic city of McKinney or City Hall unless they are the actual subject."],
+  "background": "2-3 sentence background of why this is before the governing body",
+  "detailed_summary": "one-paragraph plain-language explanation for a resident or community member, no jargon, no acronyms",
+  "locations": ["array of specific street addresses or named places${locationHint} referenced by this item, e.g. '123 Main St' or 'Municipal Airport'. Empty array if none. Do NOT include the generic city/organization name or City Hall unless they are the actual subject."],
   "is_grant": true if this item is accepting, applying for, amending, or administering a grant or external funding award; false otherwise,
-  "grant_award_amount": dollar amount the City would RECEIVE from the grantor (incoming money) as a plain number, or 0,
-  "grant_match_amount": dollar amount the City must CONTRIBUTE as local match / city share (outgoing money) as a plain number, or 0,
-  "grantor": "name of the awarding agency or funder, e.g. TxDOT, FAA, HUD, FEMA, TDEM, Office of the Governor, or \"\" if not a grant"
+  "grant_award_amount": dollar amount the organization would RECEIVE from the grantor (incoming money) as a plain number, or 0,
+  "grant_match_amount": dollar amount the organization must CONTRIBUTE as local match / share (outgoing money) as a plain number, or 0,
+  "grantor": "name of the awarding agency or funder, e.g. state DOT, FAA, HUD, FEMA, EPA, DOJ, or \"\" if not a grant"
 }
 
 If a field is unknown, use an empty string (or 0 for numeric fields, [] for locations, false for is_grant). Do not invent numbers or addresses.`;
+}
 
 function extractJsonObject(text: string): Record<string, unknown> {
   let c = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
@@ -74,27 +81,32 @@ const LenientItem = z.object({
   grantor: z.coerce.string().nullish(),
 });
 
-const PARSE_INSTRUCTIONS = `Parse this McKinney, TX City Council meeting agenda. Extract EVERY numbered agenda item (skip section headers, invocations, public-comment blurbs, and procedural text).
+function buildParseInstructions(organizationName?: string | null): string {
+  const orgLabel = organizationName?.trim()
+    ? `${organizationName.trim()} meeting agenda`
+    : "public meeting or council agenda";
+  return `Parse this ${orgLabel}. Extract EVERY numbered agenda item (skip section headers, invocations, public-comment blurbs, and procedural text).
 
 The agenda is divided into sections. Items appearing under a heading like "CONSENT AGENDA", "CONSENT MINUTES", "CONSENT ORDINANCES", or "CONSENT RESOLUTIONS" are on the consent agenda (passed in one vote with no debate). Items under "INDIVIDUAL CONSIDERATION", "PUBLIC HEARINGS", or similar are NOT on consent.
 
-Flag GRANT items: any item whose title mentions a grant, award, "accept funding", "interlocal funding agreement", or names a funding agency such as TxDOT, FAA, HUD, FEMA, TDEM, OOG (Office of the Governor), DOJ, EPA, COG, NCTCOG, or similar. For grants, separate money the City RECEIVES (grant_award_amount, incoming) from money the City must CONTRIBUTE as local match (grant_match_amount, outgoing).
+Flag GRANT items: any item whose title mentions a grant, award, "accept funding", "interlocal funding agreement", or names a funding agency such as state DOT, FAA, HUD, FEMA, DOJ, EPA, regional council of governments, or similar. For grants, separate money the organization RECEIVES (grant_award_amount, incoming) from money the organization must CONTRIBUTE as local match (grant_match_amount, outgoing).
 
 Respond with ONLY a JSON array (no markdown fences, no commentary). Each element:
 {
   "item_number": "26-0563" or "",
   "raw_title": "full original title",
   "item_type": one of "Minutes" | "Ordinance" | "Resolution" | "Public Hearing" | "Election" | "Executive Session" | "Grant" | "Other",
-  "department": best guess owning City department (Parks & Recreation, Aviation, Public Works, Police, Fire, Planning, Finance, City Secretary, City Manager, Economic Development, Legal, IT, etc.),
+  "department": best guess owning department or office (Parks & Recreation, Aviation, Public Works, Police, Fire, Planning, Finance, Clerk / Secretary, Administration, Economic Development, Legal, IT, etc.),
   "cost_estimate": dollar amount stated in the title like "$1,200,000", or "",
   "cost_numeric": same cost as a plain number, or 0,
   "plain_summary": "two-sentence plain-language explanation for a resident, no jargon",
   "on_consent": true if this item appears under a CONSENT section, false otherwise,
   "is_grant": true if this item is accepting/applying for/amending a grant or external funding award,
-  "grant_award_amount": dollar amount the City would RECEIVE (incoming) as a plain number, or 0,
-  "grant_match_amount": dollar amount the City must CONTRIBUTE as local match (outgoing) as a plain number, or 0,
-  "grantor": awarding agency name (e.g. "TxDOT", "FAA", "HUD"), or ""
+  "grant_award_amount": dollar amount the organization would RECEIVE (incoming) as a plain number, or 0,
+  "grant_match_amount": dollar amount the organization must CONTRIBUTE as local match (outgoing) as a plain number, or 0,
+  "grantor": awarding agency name (e.g. "FAA", "HUD", "FEMA"), or ""
 }`;
+}
 
 function extractJsonArray(text: string): unknown[] {
   let cleaned = text.trim();
@@ -153,21 +165,62 @@ function normalizeItems(rawItems: unknown[]) {
     .filter((x): x is NonNullable<typeof x> => x !== null);
 }
 
-async function callAIParser(agendaText: string) {
+async function callAIParser(agendaText: string, organizationName?: string | null) {
   const { text } = await generateText({
     model: getGeminiModel(),
-    prompt: `${PARSE_INSTRUCTIONS}\n\nAGENDA TEXT:\n${agendaText}`,
+    prompt: `${buildParseInstructions(organizationName)}\n\nAGENDA TEXT:\n${agendaText}`,
   });
   const items = normalizeItems(extractJsonArray(text));
   if (items.length === 0) throw new Error("No agenda items could be parsed");
   return items;
 }
 
+async function findOrCreateOrganizationByName(rawName: string) {
+  const name = rawName.trim();
+  if (!name) return null;
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: existing, error: selErr } = await supabaseAdmin
+    .from("organizations")
+    .select("*")
+    .ilike("name", name)
+    .maybeSingle();
+  if (selErr) throw new Error(selErr.message);
+  if (existing) return existing;
+
+  const { data: created, error: insErr } = await supabaseAdmin
+    .from("organizations")
+    .insert({ name })
+    .select()
+    .single();
+  if (insErr) throw new Error(insErr.message);
+  return created;
+}
+
+export const listOrganizations = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin
+    .from("organizations")
+    .select("*")
+    .order("name", { ascending: true });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+});
+
+export const createOrganization = createServerFn({ method: "POST" })
+  .validator((input: unknown) =>
+    z.object({ name: z.string().trim().min(1, "Enter a city or organization name").max(120) }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const org = await findOrCreateOrganizationByName(data.name);
+    if (!org) throw new Error("Enter a city or organization name");
+    return org;
+  });
+
 export const listAgendas = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
     .from("agendas")
-    .select("*")
+    .select("*, organizations(id, name)")
     .order("meeting_date", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
@@ -199,7 +252,7 @@ export const getAgenda = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [{ data: agenda, error: e1 }, { data: items, error: e2 }] = await Promise.all([
-      supabaseAdmin.from("agendas").select("*").eq("id", data.id).single(),
+      supabaseAdmin.from("agendas").select("*, organizations(id, name)").eq("id", data.id).single(),
       supabaseAdmin
         .from("agenda_items")
         .select("*")
@@ -217,7 +270,7 @@ export const getItem = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: item, error } = await supabaseAdmin
       .from("agenda_items")
-      .select("*, agendas(id,title,meeting_date)")
+      .select("*, agendas(id,title,meeting_date,organization_id,organizations(id,name))")
       .eq("id", data.id)
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -244,6 +297,7 @@ async function insertParsed(opts: {
   title: string;
   meetingDate: string | null;
   sourceFilename: string | null;
+  organizationId: string | null;
   items: ParsedItem[];
 }) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -253,6 +307,7 @@ async function insertParsed(opts: {
       title: opts.title,
       meeting_date: opts.meetingDate,
       source_filename: opts.sourceFilename,
+      organization_id: opts.organizationId,
     })
     .select()
     .single();
@@ -281,23 +336,26 @@ async function insertParsed(opts: {
   return agenda;
 }
 
-export const seedDefaultAgendaIfEmpty = createServerFn({ method: "POST" }).handler(async () => {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { count, error } = await supabaseAdmin
-    .from("agendas")
-    .select("*", { count: "exact", head: true });
-  if (error) throw new Error(error.message);
-  if ((count ?? 0) > 0) return { seeded: false };
-
-  const items = await callAIParser(SEED_AGENDA_TEXT);
-  await insertParsed({
-    title: SEED_AGENDA_TITLE,
-    meetingDate: SEED_AGENDA_DATE,
-    sourceFilename: "Agenda.pdf",
-    items,
-  });
-  return { seeded: true };
-});
+async function resolveOrganization(opts: {
+  organizationId?: string | null;
+  organizationName?: string | null;
+}): Promise<{ id: string | null; name: string | null }> {
+  if (opts.organizationId) {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
+      .from("organizations")
+      .select("id, name")
+      .eq("id", opts.organizationId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (data) return { id: data.id, name: data.name };
+  }
+  if (opts.organizationName?.trim()) {
+    const org = await findOrCreateOrganizationByName(opts.organizationName);
+    if (org) return { id: org.id, name: org.name };
+  }
+  return { id: null, name: null };
+}
 
 export const parseAgendaFromText = createServerFn({ method: "POST" })
   .validator((input: unknown) =>
@@ -306,19 +364,26 @@ export const parseAgendaFromText = createServerFn({ method: "POST" })
         title: z.string().min(1).max(300),
         meetingDate: z.string().nullable().optional(),
         sourceFilename: z.string().nullable().optional(),
+        organizationId: z.string().uuid().nullable().optional(),
+        organizationName: z.string().max(120).nullable().optional(),
         text: z.string().min(50).max(200_000),
       })
       .parse(input),
   )
   .handler(async ({ data }) => {
-    const items = await callAIParser(data.text);
+    const org = await resolveOrganization({
+      organizationId: data.organizationId ?? null,
+      organizationName: data.organizationName ?? null,
+    });
+    const items = await callAIParser(data.text, org.name);
     const agenda = await insertParsed({
       title: data.title,
       meetingDate: data.meetingDate ?? null,
       sourceFilename: data.sourceFilename ?? null,
+      organizationId: org.id,
       items,
     });
-    return { agendaId: agenda.id, itemCount: items.length };
+    return { agendaId: agenda.id, organizationId: org.id, itemCount: items.length };
   });
 
 export const parseAgendaFromPdf = createServerFn({ method: "POST" })
@@ -328,6 +393,8 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
         title: z.string().min(1).max(300),
         meetingDate: z.string().nullable().optional(),
         sourceFilename: z.string().nullable().optional(),
+        organizationId: z.string().uuid().nullable().optional(),
+        organizationName: z.string().max(120).nullable().optional(),
         // Storage object path inside the "agenda-pdfs" bucket. The browser
         // uploads the PDF directly to storage so we never pay the cost of
         // base64-encoding ~20MB through the RPC payload (which OOM'd the Worker).
@@ -337,6 +404,10 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const org = await resolveOrganization({
+      organizationId: data.organizationId ?? null,
+      organizationName: data.organizationName ?? null,
+    });
     const { data: blob, error: dlError } = await supabaseAdmin.storage
       .from("agenda-pdfs")
       .download(data.pdfPath);
@@ -351,7 +422,7 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
         {
           role: "user",
           content: [
-            { type: "text", text: PARSE_INSTRUCTIONS },
+            { type: "text", text: buildParseInstructions(org.name) },
             { type: "file", mediaType: "application/pdf", data: pdfBytes },
           ],
         },
@@ -367,9 +438,10 @@ export const parseAgendaFromPdf = createServerFn({ method: "POST" })
       title: data.title,
       meetingDate: data.meetingDate ?? null,
       sourceFilename: data.sourceFilename ?? null,
+      organizationId: org.id,
       items: normalized,
     });
-    return { agendaId: agenda.id, itemCount: normalized.length };
+    return { agendaId: agenda.id, organizationId: org.id, itemCount: normalized.length };
   });
 
 // ─────────────────────────── Enrichment via Legistar ───────────────────────────
@@ -380,6 +452,7 @@ async function callEnrichAI(opts: {
   text?: string;
   files?: AiFilePart[];
   itemTitle: string;
+  organizationName?: string | null;
 }) {
   const userParts: Array<
     | { type: "text"; text: string }
@@ -387,7 +460,7 @@ async function callEnrichAI(opts: {
   > = [
     {
       type: "text",
-      text: `${ENRICH_INSTRUCTIONS}\n\nAGENDA ITEM TITLE: ${opts.itemTitle}\n${
+      text: `${buildEnrichInstructions(opts.organizationName)}\n\nAGENDA ITEM TITLE: ${opts.itemTitle}\n${
         opts.text ? `\nDOCUMENT TEXT:\n${opts.text.slice(0, 120_000)}` : ""
       }`,
     },
@@ -407,16 +480,27 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
   .validator((input: unknown) => z.object({ itemId: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { findMatterByFile, getMatterAttachments, pickStaffReport, pickTopAttachments, fetchAttachmentText, buildMatterUrl } =
-      await import("@/lib/legistar.server");
+    const {
+      deriveLegistarClient,
+      findMatterByFile,
+      getMatterAttachments,
+      pickStaffReport,
+      pickTopAttachments,
+      fetchAttachmentText,
+      buildMatterUrl,
+    } = await import("@/lib/legistar.server");
 
     const { data: item, error } = await supabaseAdmin
       .from("agenda_items")
-      .select("*")
+      .select("*, agendas(id, title, organizations(id, name))")
       .eq("id", data.itemId)
       .single();
     if (error) throw new Error(error.message);
     if (!item) throw new Error("Item not found");
+    const orgName =
+      (item.agendas as { organizations?: { name?: string | null } | null } | null)?.organizations
+        ?.name ?? null;
+    const legistarClient = deriveLegistarClient(orgName);
 
     try {
       let matterId = item.matter_id as number | null;
@@ -428,8 +512,21 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
       let staffReportUrl = item.staff_report_url as string | null;
       let rawAttachments: Awaited<ReturnType<typeof getMatterAttachments>> = [];
 
-      if (!matterId && item.item_number) {
-        const matter = await findMatterByFile(item.item_number);
+      if (!legistarClient && !matterId) {
+        const { error: uErr } = await supabaseAdmin
+          .from("agenda_items")
+          .update({
+            enrichment_status: "none",
+            enrichment_error: "Assign a city or organization name to look up staff reports on Legistar",
+            enriched_at: new Date().toISOString(),
+          })
+          .eq("id", item.id);
+        if (uErr) throw new Error(uErr.message);
+        return { status: "none" as const };
+      }
+
+      if (!matterId && item.item_number && legistarClient) {
+        const matter = await findMatterByFile(legistarClient, item.item_number);
         if (matter) {
           matterId = matter.MatterId;
           matterGuid = matter.MatterGuid ?? null;
@@ -437,12 +534,12 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
           matterStatus = matter.MatterStatusName;
         }
       }
-      if (matterId && !matterUrl) {
-        matterUrl = buildMatterUrl(matterId, matterGuid);
+      if (matterId && !matterUrl && legistarClient) {
+        matterUrl = buildMatterUrl(legistarClient, matterId, matterGuid);
       }
 
-      if (matterId) {
-        rawAttachments = await getMatterAttachments(matterId);
+      if (matterId && legistarClient) {
+        rawAttachments = await getMatterAttachments(legistarClient, matterId);
         if (attachments.length === 0 && rawAttachments.length > 0) {
           attachments = rawAttachments
             .map((a) => ({
@@ -516,6 +613,7 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
         text: combinedText || undefined,
         files: files.length > 0 ? files : undefined,
         itemTitle: item.raw_title,
+        organizationName: orgName,
       });
 
       const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");

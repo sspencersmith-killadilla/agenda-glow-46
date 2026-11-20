@@ -132,6 +132,7 @@ export type Database = {
           created_at: string
           id: string
           meeting_date: string | null
+          organization_id: string | null
           source_filename: string | null
           title: string
         }
@@ -139,6 +140,7 @@ export type Database = {
           created_at?: string
           id?: string
           meeting_date?: string | null
+          organization_id?: string | null
           source_filename?: string | null
           title: string
         }
@@ -146,8 +148,35 @@ export type Database = {
           created_at?: string
           id?: string
           meeting_date?: string | null
+          organization_id?: string | null
           source_filename?: string | null
           title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agendas_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
         }
         Relationships: []
       }

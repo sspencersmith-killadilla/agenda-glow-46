@@ -9,7 +9,22 @@ import { ArrowLeft, ExternalLink, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/item/$id")({
   head: () => ({
-    meta: [{ title: "Agenda item — McKinney Council Dashboard" }],
+    meta: [
+      { title: "Agenda Item — CivicPlexus Agenda" },
+      {
+        name: "description",
+        content:
+          "Detailed plain-language breakdown, funding, locations, and source documents for a public meeting agenda item on CivicPlexus Agenda.",
+      },
+      { property: "og:title", content: "Agenda Item — CivicPlexus Agenda" },
+      {
+        property: "og:description",
+        content:
+          "Detailed plain-language breakdown, funding, locations, and source documents for a public meeting agenda item.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
   }),
   component: ItemDetail,
   errorComponent: ({ error }) => (
@@ -64,19 +79,34 @@ function ItemDetail() {
     grant_award_amount: number | string | null;
     grant_match_amount: number | string | null;
     grantor: string | null;
+    agendas?: {
+      id: string;
+      title: string;
+      meeting_date: string | null;
+      organizations?: { id: string; name: string } | null;
+    } | null;
   };
 
+  const orgName = it.agendas?.organizations?.name ?? null;
   const enriched = it.enrichment_status === "done";
   const busy = enrichMut.isPending;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div>
       <header className="border-b">
         <div className="container mx-auto flex items-center gap-3 px-6 py-4">
           <Button variant="ghost" size="sm" onClick={() => router.history.back()}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back
           </Button>
-          <h1 className="text-lg font-semibold">Agenda item {it.item_number}</h1>
+          <img
+            src="/civicplexus-mark.png"
+            alt="CivicPlexus"
+            className="h-7 w-7 shrink-0 rounded"
+          />
+          <div>
+            <h1 className="text-lg font-semibold">Agenda item {it.item_number}</h1>
+            {orgName && <p className="text-xs text-muted-foreground">{orgName}</p>}
+          </div>
           <div className="ml-auto">
             <Button
               size="sm"
@@ -124,7 +154,7 @@ function ItemDetail() {
             <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
               <div>
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Potential income (award to City)
+                  Potential income (award)
                 </div>
                 <div className="mt-1 text-xl font-semibold text-emerald-700 dark:text-emerald-400">
                   {it.grant_award_amount != null
@@ -134,7 +164,7 @@ function ItemDetail() {
               </div>
               <div>
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Potential City cost (local match)
+                  Potential local cost (match)
                 </div>
                 <div className="mt-1 text-xl font-semibold">
                   {it.grant_match_amount != null && Number(it.grant_match_amount) > 0
@@ -215,7 +245,7 @@ function ItemDetail() {
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
               {it.locations.map((loc, i) => {
-                const q = encodeURIComponent(`${loc}, McKinney, TX`);
+                const q = encodeURIComponent(orgName ? `${loc}, ${orgName}` : loc);
                 return (
                   <div key={i} className="space-y-2">
                     <a

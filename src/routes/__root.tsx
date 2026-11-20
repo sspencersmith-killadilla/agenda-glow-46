@@ -77,23 +77,37 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Agenda Insight monitors and displays key agenda items, highlighting pertinent details like cost and ownership." },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Agenda Insight monitors and displays key agenda items, highlighting pertinent details like cost and ownership." },
+      { title: "CivicPlexus Agenda" },
+      {
+        name: "description",
+        content:
+          "Plain-language public meeting agenda dashboard for any city or organization — part of the CivicPlexus family of sites.",
+      },
+      { name: "author", content: "CivicPlexus" },
+      { property: "og:title", content: "CivicPlexus Agenda" },
+      {
+        property: "og:description",
+        content:
+          "Plain-language public meeting agenda dashboard for any city or organization — part of the CivicPlexus family of sites.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Lovable App" },
-      { name: "twitter:description", content: "Agenda Insight monitors and displays key agenda items, highlighting pertinent details like cost and ownership." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/97d0850c-35c6-48dd-8596-a698613f3111/id-preview-4671a7ca--0673a7d3-46f2-427a-aa9f-9b03ae5a6280.lovable.app-1781128434619.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/97d0850c-35c6-48dd-8596-a698613f3111/id-preview-4671a7ca--0673a7d3-46f2-427a-aa9f-9b03ae5a6280.lovable.app-1781128434619.png" },
+      { name: "twitter:title", content: "CivicPlexus Agenda" },
+      {
+        name: "twitter:description",
+        content:
+          "Plain-language public meeting agenda dashboard for any city or organization — part of the CivicPlexus family of sites.",
+      },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
+      },
+      {
+        rel: "icon",
+        type: "image/png",
+        href: "/favicon.png",
       },
     ],
   }),
@@ -122,8 +136,18 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <div className="flex min-h-screen flex-col bg-background">
+        <div className="flex-1">
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+        </div>
+        <footer className="border-t py-4 text-xs text-muted-foreground">
+          <div className="container mx-auto flex flex-wrap items-center justify-between gap-2 px-6">
+            <span>CivicPlexus Agenda · Part of the CivicPlexus family of sites</span>
+            <span>Released under the MIT License</span>
+          </div>
+        </footer>
+      </div>
     </QueryClientProvider>
   );
 }

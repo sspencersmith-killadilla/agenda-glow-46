@@ -1,9 +1,18 @@
-// Legistar WebAPI helpers + docx text extraction for McKinney.
+// Legistar WebAPI helpers + attachment text extraction for any Legistar-hosted organization.
 // Server-only (uses fetch + zip decoding).
 import { unzipSync, strFromU8 } from "fflate";
 
-const CLIENT = "mckinney";
-const BASE = `https://webapi.legistar.com/v1/${CLIENT}`;
+export function deriveLegistarClient(organizationName?: string | null): string | null {
+  if (!organizationName) return null;
+  const stripped = organizationName
+    .split(",")[0]
+    ?.trim()
+    .replace(/^(?:the\s+)?(?:city|town|village|borough|county|municipality)\s+of\s+/i, "")
+    .replace(/\s+(?:city\s+council|town\s+council|council|commission|board)$/i, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  return stripped && stripped.length >= 2 ? stripped : null;
+}
 
 export type LegistarMatter = {
   MatterId: number;
@@ -24,31 +33,43 @@ export type LegistarAttachment = {
   MatterAttachmentFileName: string | null;
 };
 
-export function buildMatterUrl(matterId: number, guid?: string | null): string {
-  const base = `https://mckinney.legistar.com/LegislationDetail.aspx?ID=${matterId}`;
+export function buildMatterUrl(client: string, matterId: number, guid?: string | null): string {
+  const base = `https://${encodeURIComponent(client)}.legistar.com/LegislationDetail.aspx?ID=${matterId}`;
   return guid ? `${base}&GUID=${guid}` : base;
 }
 
-export async function findMatterByFile(matterFile: string): Promise<LegistarMatter | null> {
-  const url = `${BASE}/matters?$filter=${encodeURIComponent(`MatterFile eq '${matterFile}'`)}&$top=1`;
+export async function findMatterByFile(
+  client: string,
+  matterFile: string,
+): Promise<LegistarMatter | null> {
+  const base = `https://webapi.legistar.com/v1/${encodeURIComponent(client)}`;
+  const url = `${base}/matters?$filter=${encodeURIComponent(`MatterFile eq '${matterFile}'`)}&$top=1`;
   const res = await fetch(url, { headers: { Accept: "application/json" } });
   if (!res.ok) return null;
   const arr = (await res.json()) as LegistarMatter[];
   return arr?.[0] ?? null;
 }
 
-export async function getMatterAttachments(matterId: number): Promise<LegistarAttachment[]> {
-  const res = await fetch(`${BASE}/matters/${matterId}/attachments`, {
+export async function getMatterAttachments(
+  client: string,
+  matterId: number,
+): Promise<LegistarAttachment[]> {
+  const base = `https://webapi.legistar.com/v1/${encodeURIComponent(client)}`;
+  const res = await fetch(`${base}/matters/${matterId}/attachments`, {
     headers: { Accept: "application/json" },
   });
   if (!res.ok) return [];
   return (await res.json()) as LegistarAttachment[];
 }
 
-export async function getMatterAgendaText(matterId: number): Promise<string | null> {
+export async function getMatterAgendaText(
+  client: string,
+  matterId: number,
+): Promise<string | null> {
   // Sometimes the staff memo body is on the matter itself (MatterText fields)
   // or via /texts. We'll opportunistically try /texts.
-  const res = await fetch(`${BASE}/matters/${matterId}/texts`, {
+  const base = `https://webapi.legistar.com/v1/${encodeURIComponent(client)}`;
+  const res = await fetch(`${base}/matters/${matterId}/texts`, {
     headers: { Accept: "application/json" },
   });
   if (!res.ok) return null;
