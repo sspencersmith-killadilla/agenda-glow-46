@@ -10,13 +10,13 @@ import { ArrowLeft, ExternalLink, Sparkles } from "lucide-react";
 export const Route = createFileRoute("/item/$id")({
   head: () => ({
     meta: [
-      { title: "Agenda Item — CivicPlexus Agenda" },
+      { title: "Agenda Item — Agenda Insight" },
       {
         name: "description",
         content:
-          "Detailed plain-language breakdown, funding, locations, and source documents for a public meeting agenda item on CivicPlexus Agenda.",
+          "Detailed plain-language breakdown, funding, locations, and source documents for a public meeting agenda item on Agenda Insight.",
       },
-      { property: "og:title", content: "Agenda Item — CivicPlexus Agenda" },
+      { property: "og:title", content: "Agenda Item — Agenda Insight" },
       {
         property: "og:description",
         content:
@@ -93,18 +93,18 @@ function ItemDetail() {
 
   return (
     <div>
-      <header className="border-b">
-        <div className="container mx-auto flex items-center gap-3 px-6 py-4">
+      <header className="border-b border-t-4 border-t-highlight bg-card">
+        <div className="container mx-auto flex flex-wrap items-center gap-3 px-6 py-4">
           <Button variant="ghost" size="sm" onClick={() => router.history.back()}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back
           </Button>
           <img
-            src="/civicplexus-mark.png"
-            alt="CivicPlexus"
+            src="/agenda-insight-mark.svg"
+            alt="Agenda Insight"
             className="h-7 w-7 shrink-0 rounded"
           />
           <div>
-            <h1 className="text-lg font-semibold">Agenda item {it.item_number}</h1>
+            <p className="font-display font-bold text-primary">Agenda Insight</p><h1 className="text-sm font-semibold">Agenda item {it.item_number}</h1>
             {orgName && <p className="text-xs text-muted-foreground">{orgName}</p>}
           </div>
           <div className="ml-auto">
@@ -131,7 +131,7 @@ function ItemDetail() {
           {it.cost_estimate && <Badge variant="outline">{it.cost_estimate}</Badge>}
           {it.matter_status && <Badge variant="outline">{it.matter_status}</Badge>}
           {it.is_grant && (
-            <Badge className="border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300">
+            <Badge className="border-success/40 bg-success/15 text-success-foreground">
               Grant{it.grantor ? ` · ${it.grantor}` : ""}
             </Badge>
           )}
@@ -145,7 +145,7 @@ function ItemDetail() {
         )}
 
         {it.is_grant && (
-          <Card className="border-emerald-500/30 bg-emerald-500/5">
+          <Card className="border-success/30 bg-success/5">
             <CardHeader>
               <CardTitle className="text-base">
                 Grant impact{it.grantor ? ` — ${it.grantor}` : ""}
@@ -156,7 +156,7 @@ function ItemDetail() {
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">
                   Potential income (award)
                 </div>
-                <div className="mt-1 text-xl font-semibold text-emerald-700 dark:text-emerald-400">
+                <div className="mt-1 text-xl font-semibold text-success-foreground">
                   {it.grant_award_amount != null
                     ? `+$${Number(it.grant_award_amount).toLocaleString()}`
                     : "Not yet disclosed"}
@@ -334,7 +334,7 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 }
 
 function EnrichmentBadge({ status }: { status: string }) {
-  if (status === "done") return <Badge variant="outline" className="border-emerald-500/50 text-emerald-700 dark:text-emerald-400">Staff report parsed</Badge>;
+  if (status === "done") return <Badge variant="outline" className="border-success/50 text-success-foreground">Staff report parsed</Badge>;
   if (status === "failed") return <Badge variant="destructive">Enrichment failed</Badge>;
   if (status === "none") return <Badge variant="outline">No staff report</Badge>;
   return <Badge variant="outline">Awaiting staff report</Badge>;

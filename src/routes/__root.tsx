@@ -77,37 +77,40 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "CivicPlexus Agenda" },
+      { title: "Agenda Insight" },
       {
         name: "description",
         content:
-          "Plain-language public meeting agenda dashboard for any city or organization — part of the CivicPlexus family of sites.",
+          "Plain-language public meeting agenda dashboard for any city or organization.",
       },
-      { name: "author", content: "CivicPlexus" },
-      { property: "og:title", content: "CivicPlexus Agenda" },
+      { name: "author", content: "Agenda Insight" },
+      { property: "og:title", content: "Agenda Insight" },
       {
         property: "og:description",
         content:
-          "Plain-language public meeting agenda dashboard for any city or organization — part of the CivicPlexus family of sites.",
+          "Plain-language public meeting agenda dashboard for any city or organization.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "CivicPlexus Agenda" },
+      { name: "twitter:title", content: "Agenda Insight" },
       {
         name: "twitter:description",
         content:
-          "Plain-language public meeting agenda dashboard for any city or organization — part of the CivicPlexus family of sites.",
+          "Plain-language public meeting agenda dashboard for any city or organization.",
       },
     ],
     links: [
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" },
       {
         rel: "stylesheet",
         href: appCss,
       },
       {
         rel: "icon",
-        type: "image/png",
-        href: "/favicon.png",
+        type: "image/svg+xml",
+        href: "/agenda-insight-mark.svg",
       },
     ],
   }),
@@ -143,7 +146,7 @@ function RootComponent() {
         </div>
         <footer className="border-t py-4 text-xs text-muted-foreground">
           <div className="container mx-auto flex flex-wrap items-center justify-between gap-2 px-6">
-            <span>CivicPlexus Agenda · Part of the CivicPlexus family of sites</span>
+            <span>Agenda Insight</span>
             <span>Released under the MIT License</span>
           </div>
         </footer>

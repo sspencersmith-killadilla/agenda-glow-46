@@ -61,13 +61,13 @@ const SELECTED_ORG_STORAGE_KEY = "civicplexus_selected_org_id";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "CivicPlexus Agenda — Public Meeting Dashboard" },
+      { title: "Agenda Insight — Public Meeting Dashboard" },
       {
         name: "description",
         content:
-          "Plain-language agenda dashboard for any city or organization — costs, departments, grants, and summaries. Part of the CivicPlexus family of sites.",
+          "Plain-language agenda dashboard for any city or organization — costs, departments, grants, and summaries. ",
       },
-      { property: "og:title", content: "CivicPlexus Agenda — Public Meeting Dashboard" },
+      { property: "og:title", content: "Agenda Insight — Public Meeting Dashboard" },
       {
         property: "og:description",
         content:
@@ -308,7 +308,7 @@ function TestGeminiButton() {
         {state.status === "running" ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
         ) : state.status === "ok" ? (
-          <CheckCircle2 className="mr-2 h-4 w-4 text-green-600" />
+          <CheckCircle2 className="mr-2 h-4 w-4 text-success-foreground" />
         ) : state.status === "error" ? (
           <XCircle className="mr-2 h-4 w-4 text-destructive" />
         ) : (
@@ -409,23 +409,20 @@ function Shell({
 
   return (
     <div>
-      <header className="border-b">
+      <header className="border-b border-t-4 border-t-highlight bg-card">
         <div className="container mx-auto flex flex-wrap items-center justify-between gap-4 px-6 py-4">
           <div className="flex items-center gap-3">
             <img
-              src="/civicplexus-mark.png"
-              alt="CivicPlexus"
+              src="/agenda-insight-mark.svg"
+              alt="Agenda Insight"
               className="h-9 w-9 shrink-0 rounded-md"
             />
             <div>
-              <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Part of the CivicPlexus family of sites
-              </div>
               <h1 className="text-xl font-semibold">
-                {activeOrgName ? `${activeOrgName} — Agenda Dashboard` : "CivicPlexus Agenda"}
+                Agenda Insight
               </h1>
               <p className="text-sm text-muted-foreground">
-                Plain-language summaries · departments · disclosed costs
+                {activeOrgName || "Public meeting dashboard"}
               </p>
             </div>
           </div>
@@ -583,7 +580,7 @@ function AgendaDashboard({
       </div>
 
       {grantItems.length > 0 && (
-        <Card className="border-emerald-500/30 bg-emerald-500/5">
+        <Card className="border-success/30 bg-success/5">
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
               <CardTitle className="text-base">
@@ -749,7 +746,7 @@ function AgendaDashboard({
                           </Badge>
                         )}
                         {it.is_grant && (
-                          <Badge className="ml-1 border-emerald-500/40 bg-emerald-500/15 text-[10px] text-emerald-800 dark:text-emerald-300">
+                          <Badge className="ml-1 border-success/40 bg-success/15 text-[10px] text-success-foreground">
                             Grant
                           </Badge>
                         )}
@@ -773,7 +770,7 @@ function AgendaDashboard({
                         {it.is_grant ? (
                           <div className="space-y-0.5">
                             {it.grant_award_amount != null && (
-                              <div className="font-medium text-emerald-700 dark:text-emerald-400">
+                              <div className="font-medium text-success-foreground">
                                 +${Number(it.grant_award_amount).toLocaleString()} in
                               </div>
                             )}

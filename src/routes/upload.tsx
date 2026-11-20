@@ -23,17 +23,17 @@ const NEW_ORG_VALUE = "__new__";
 export const Route = createFileRoute("/upload")({
   head: () => ({
     meta: [
-      { title: "Upload Agenda — CivicPlexus Agenda" },
+      { title: "Upload Agenda — Agenda Insight" },
       {
         name: "description",
         content:
-          "Upload a council or public meeting agenda PDF for any city or organization on CivicPlexus Agenda.",
+          "Upload a council or public meeting agenda PDF for any city or organization on Agenda Insight.",
       },
-      { property: "og:title", content: "Upload Agenda — CivicPlexus Agenda" },
+      { property: "og:title", content: "Upload Agenda — Agenda Insight" },
       {
         property: "og:description",
         content:
-          "Upload a council or public meeting agenda PDF for any city or organization on CivicPlexus Agenda.",
+          "Upload a council or public meeting agenda PDF for any city or organization on Agenda Insight.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -136,19 +136,19 @@ function UploadPage() {
 
   return (
     <div>
-      <header className="border-b">
-        <div className="container mx-auto flex items-center gap-3 px-6 py-4">
+      <header className="border-b border-t-4 border-t-highlight bg-card">
+        <div className="container mx-auto flex flex-wrap items-center gap-3 px-6 py-4">
           <Link to="/">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="mr-2 h-4 w-4" /> Dashboard
             </Button>
           </Link>
           <img
-            src="/civicplexus-mark.png"
-            alt="CivicPlexus"
+            src="/agenda-insight-mark.svg"
+            alt="Agenda Insight"
             className="h-7 w-7 shrink-0 rounded"
           />
-          <h1 className="text-lg font-semibold">Upload an agenda</h1>
+          <div><p className="font-display font-bold text-primary">Agenda Insight</p><h1 className="text-sm text-muted-foreground">Upload an agenda</h1></div>
         </div>
       </header>
       <main className="container mx-auto max-w-xl px-6 py-6">
