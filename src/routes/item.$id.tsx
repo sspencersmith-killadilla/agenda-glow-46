@@ -13,7 +13,9 @@ export const Route = createFileRoute("/item/$id")({
   }),
   component: ItemDetail,
   errorComponent: ({ error }) => (
-    <div className="p-8 text-destructive">Error: {error.message}</div>
+    <div className="p-8 text-destructive">
+      Error: {error instanceof Error ? error.message : String(error)}
+    </div>
   ),
   notFoundComponent: () => <div className="p-8">Item not found</div>,
 });

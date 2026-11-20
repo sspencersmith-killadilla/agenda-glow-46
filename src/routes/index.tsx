@@ -56,7 +56,9 @@ export const Route = createFileRoute("/")({
   }),
   component: Dashboard,
   errorComponent: ({ error }) => (
-    <div className="p-8 text-destructive">Error: {error.message}</div>
+    <div className="p-8 text-destructive">
+      Error: {error instanceof Error ? error.message : String(error)}
+    </div>
   ),
   notFoundComponent: () => <div className="p-8">Not found</div>,
 });

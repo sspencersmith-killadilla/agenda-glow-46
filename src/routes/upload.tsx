@@ -13,7 +13,9 @@ export const Route = createFileRoute("/upload")({
   head: () => ({ meta: [{ title: "Upload agenda — McKinney Council Dashboard" }] }),
   component: UploadPage,
   errorComponent: ({ error }) => (
-    <div className="p-8 text-destructive">Error: {error.message}</div>
+    <div className="p-8 text-destructive">
+      Error: {error instanceof Error ? error.message : String(error)}
+    </div>
   ),
   notFoundComponent: () => <div className="p-8">Not found</div>,
 });

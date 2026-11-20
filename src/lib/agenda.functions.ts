@@ -175,7 +175,7 @@ export const listAgendas = createServerFn({ method: "GET" }).handler(async () =>
 });
 
 export const deleteAgenda = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error: e1 } = await supabaseAdmin.from("agenda_items").delete().eq("agenda_id", data.id);
@@ -195,7 +195,7 @@ export const deleteAllAgendas = createServerFn({ method: "POST" }).handler(async
 });
 
 export const getAgenda = createServerFn({ method: "GET" })
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [{ data: agenda, error: e1 }, { data: items, error: e2 }] = await Promise.all([
@@ -212,7 +212,7 @@ export const getAgenda = createServerFn({ method: "GET" })
   });
 
 export const getItem = createServerFn({ method: "GET" })
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: item, error } = await supabaseAdmin
@@ -300,7 +300,7 @@ export const seedDefaultAgendaIfEmpty = createServerFn({ method: "POST" }).handl
 });
 
 export const parseAgendaFromText = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         title: z.string().min(1).max(300),
@@ -322,7 +322,7 @@ export const parseAgendaFromText = createServerFn({ method: "POST" })
   });
 
 export const parseAgendaFromPdf = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         title: z.string().min(1).max(300),
@@ -404,7 +404,7 @@ async function callEnrichAI(opts: {
 }
 
 export const enrichAgendaItem = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => z.object({ itemId: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ itemId: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { findMatterByFile, getMatterAttachments, pickStaffReport, pickTopAttachments, fetchAttachmentText, buildMatterUrl } =
@@ -596,7 +596,7 @@ export const enrichAgendaItem = createServerFn({ method: "POST" })
   });
 
 export const enrichAgenda = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z.object({ agendaId: z.string().uuid(), limit: z.number().int().min(1).max(60).optional() }).parse(input),
   )
   .handler(async ({ data }) => {
